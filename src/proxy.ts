@@ -1,55 +1,89 @@
-/**
- * Global proxy injection for OpenAI Codex network traffic.
- *
- * This plugin and the pi-ai SDK it depends on both use the global fetch,
- * and Node's built-in fetch does not read HTTP(S)_PROXY environment
- * variables. Installing an undici global dispatcher once per process routes
- * every fetch in this process - including the OAuth token exchange performed
- * inside pi-ai - through the configured proxy without touching pi-ai.
- *
- * Calling installGlobalProxy again with a different URL replaces the
- * dispatcher, so Settings changes apply without restarting dsh.
- */
+/** Hostname-selective proxy routing for OpenAI Codex network traffic. */
 
-import { EnvHttpProxyAgent, ProxyAgent, setGlobalDispatcher } from 'undici'
+import { getGlobalDispatcher, ProxyAgent, request, setGlobalDispatcher } from 'undici'
 import type { Dispatcher } from 'undici'
 
-let currentKey: string | undefined
+export interface OpenAICodexProxyHandle {
+  /** Warm the production proxy pool, then measure a second request through it. */
+  speedTest(): Promise<number>
+  dispose(): void
+}
 
-function createDispatcher(proxyUrl: string): Dispatcher {
-  const url = new URL(proxyUrl)
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error(
-      'Unsupported proxy protocol ' + JSON.stringify(url.protocol) + '; use an http:// or https:// proxy URL (e.g. http://127.0.0.1:7890)',
-    )
-  }
-  return new ProxyAgent(proxyUrl)
+/** Domains owned by the OpenAI surfaces used by OAuth, Codex, images, and assets. */
+const OPENAI_PROXY_DOMAINS = [
+  'openai.com',
+  'chatgpt.com',
+  'oaistatic.com',
+  'oaiusercontent.com',
+] as const
+
+/** Match only an exact OpenAI domain or one of its subdomains. */
+export function isOpenAIProxyHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase().replace(/\.$/u, '')
+  return OPENAI_PROXY_DOMAINS.some(domain => normalized === domain || normalized.endsWith(`.${domain}`))
 }
 
 /**
- * Apply the process-wide proxy dispatcher.
- *
- * Resolution order: explicit proxyUrl (bundle config or Settings) >
- * DSH_HTTPS_PROXY environment variable > standard HTTPS_PROXY /
- * HTTP_PROXY / ALL_PROXY (handled by EnvHttpProxyAgent, which also
- * honors NO_PROXY). Re-invoking with an unchanged source is a no-op.
- * An invalid URL logs a warning and leaves the previous dispatcher active.
+ * Compose a dispatcher that dynamically selects the loopback proxy for
+ * OpenAI-owned hosts and preserves the existing dispatcher for everything else.
  */
-export function installGlobalProxy(proxyUrl?: string): void {
-  const env = process.env
-  const explicit = proxyUrl?.trim()
-  const dshProxy = env.DSH_HTTPS_PROXY?.trim()
-  const key = explicit || dshProxy || (env.HTTPS_PROXY || env.HTTP_PROXY || env.ALL_PROXY ? 'env' : '')
-  if (key === '') return
-  if (key === currentKey) return
-  let dispatcher: Dispatcher
-  try {
-    const chosen = explicit || dshProxy
-    dispatcher = chosen ? createDispatcher(chosen) : new EnvHttpProxyAgent()
-  } catch (error) {
-    console.error('[dsh-codex] invalid proxy configuration ignored: ' + (error instanceof Error ? error.message : String(error)))
-    return
+export function createOpenAICodexDispatcher(
+  direct: Dispatcher,
+  proxied: Dispatcher,
+  enabled: () => boolean,
+): Dispatcher {
+  return direct.compose(directDispatch => function dispatch(options, handler) {
+    let hostname = ''
+    try {
+      if (options.origin !== undefined) hostname = new URL(options.origin).hostname
+    } catch {
+      // Let the original dispatcher report malformed request options.
+    }
+    return enabled() && isOpenAIProxyHost(hostname)
+      ? proxied.dispatch(options, handler)
+      : directDispatch(options, handler)
+  })
+}
+
+/** Keep the first probe as warm-up and report only the reused connection. */
+export async function measureWarmLatency(probe: () => Promise<number>): Promise<number> {
+  await probe()
+  return probe()
+}
+
+/**
+ * Install one process-wide router because pi-ai uses the global fetch. Only
+ * OpenAI hosts can reach the loopback proxy; DeepSeek and arbitrary tool URLs
+ * continue through the process' original dispatcher.
+ */
+export function installOpenAICodexProxy(
+  enabled: () => boolean,
+  proxyUrl = 'http://127.0.0.1:18080',
+): OpenAICodexProxyHandle {
+  const parsed = new URL(proxyUrl)
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('The OpenAI Codex loopback proxy must use http:// or https://')
   }
-  setGlobalDispatcher(dispatcher)
-  currentKey = key
+  const direct = getGlobalDispatcher()
+  const proxied = new ProxyAgent(proxyUrl)
+  const selective = createOpenAICodexDispatcher(direct, proxied, enabled)
+  setGlobalDispatcher(selective)
+  const probe = async (): Promise<number> => {
+    const startedAt = performance.now()
+    const response = await request('https://chatgpt.com/backend-api/wham/usage', {
+      method: 'GET',
+      dispatcher: proxied,
+      signal: AbortSignal.timeout(15_000),
+      headers: { 'user-agent': 'dsh-codex-vless-speed-test' },
+    })
+    await response.body.dump()
+    return Math.max(1, Math.round(performance.now() - startedAt))
+  }
+  return {
+    speedTest: () => measureWarmLatency(probe),
+    dispose: () => {
+      if (getGlobalDispatcher() === selective) setGlobalDispatcher(direct)
+      void proxied.close().catch(() => undefined)
+    },
+  }
 }

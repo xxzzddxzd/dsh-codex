@@ -14,7 +14,7 @@ import type {} from '@deepseek-ai/dsh-web'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-fs'
-import { installGlobalProxy } from './proxy.ts'
+import { installOpenAICodexProxy } from './proxy.ts'
 import { createOpenAICodexAdapter } from './adapter.ts'
 import { registerOpenAICodexAuthRoutes } from './auth-routes.ts'
 import { installReadImageEnhancement } from './read-image-enhancement.ts'
@@ -36,9 +36,10 @@ export {
 export {
   DEFAULT_IMAGE_TOOL_PREFERENCES,
   DEFAULT_RESPONSE_API_PREFERENCES,
+  DEFAULT_VLESS_PREFERENCES,
   ImageToolPolicy,
 } from './tool-policy.ts'
-export type { ImageToolPreferences, ResponseApiPreferences } from './tool-policy.ts'
+export type { ImageToolPreferences, ResponseApiPreferences, VlessPreferences } from './tool-policy.ts'
 export { OPENAI_CODEX_USAGE_URL, parseOpenAICodexUsage, readOpenAICodexRateLimits } from './usage.ts'
 export type {
   OpenAICodexCredits,
@@ -116,8 +117,6 @@ export interface Config {
   useWebSocketContextReuse?: boolean
   /** Use Codex V2 Responses compaction for Harness compaction calls. */
   useNativeCompaction?: boolean
-  /** HTTP(S) proxy URL for all Codex traffic; the Settings page overrides this at runtime. */
-  proxy?: string
 }
 
 export const Config: z<Config> = z.object({
@@ -129,7 +128,6 @@ export const Config: z<Config> = z.object({
   shareImagegenWithOtherModels: z.boolean().default(true),
   useWebSocketContextReuse: z.boolean().default(false),
   useNativeCompaction: z.boolean().default(false),
-  proxy: z.string().default('http://127.0.0.1:1080'),
 })
 
 /**
@@ -146,8 +144,9 @@ export function apply(ctx: Context, config: Config): void {
     useWebSocketContextReuse: config.useWebSocketContextReuse ?? false,
     useNativeCompaction: config.useNativeCompaction ?? false,
   })
-  installGlobalProxy(config.proxy || service.policy.proxySnapshot())
-  service.policy.watchProxy(() => { installGlobalProxy(service.policy.proxySnapshot()) })
+  const proxy = installOpenAICodexProxy(() => service.policy.vlessSnapshot().useVless)
+  service.attachProxy(proxy)
+  ctx.effect(() => () => { proxy.dispose() }, 'dsh-openai-codex: selective VLESS proxy')
   const credentials = service.credentials
   const imageTools = service.policy
   ctx.provide('openAICodex', service)
@@ -169,7 +168,7 @@ export function apply(ctx: Context, config: Config): void {
     resolveRequestId: () => String(ctx.get('agents')?.currentInitiator()?.session.id ?? randomUUID()),
     recordRequest: request => { recordOpenAICodexSearchRequest(ctx, request) },
   }))
-  ctx.inject(['webServer'], webCtx => registerOpenAICodexAuthRoutes(webCtx, credentials, imageTools))
+  ctx.inject(['webServer'], webCtx => registerOpenAICodexAuthRoutes(webCtx, credentials, imageTools, service))
   ctx.inject(['tools', 'fs', 'attachments'], toolCtx => {
     toolCtx.tools.register(imagegenTool(toolCtx, credentials, imageTools))
   })

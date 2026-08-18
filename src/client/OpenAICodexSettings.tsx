@@ -27,6 +27,17 @@ interface LoginChallenge {
   url: string
 }
 
+interface VlessStatus {
+  enabled: boolean
+  configured: boolean
+  running: boolean
+  reachable: boolean
+  pid?: number
+  latencyMs?: number
+  node?: string
+  message?: string
+}
+
 /** Dependencies injected by the browser plugin entry. */
 export interface OpenAICodexSettingsInjected {
   /** Localized page copy. */
@@ -54,6 +65,8 @@ const progressTrackStyle: CSSProperties = { height: 8, overflow: 'hidden', borde
 const toggleRowStyle: CSSProperties = { ...rowStyle, flexWrap: 'nowrap', alignItems: 'flex-start' }
 const toggleCopyStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 3 }
 const toggleTrackStyle: CSSProperties = { position: 'relative', width: 40, height: 22, flex: '0 0 auto', marginTop: 1, padding: 0, border: 0, borderRadius: 999, cursor: 'pointer', transition: 'background 120ms ease' }
+const vlessStatusRowStyle: CSSProperties = { ...rowStyle, flexWrap: 'nowrap' }
+const vlessStatusTextStyle: CSSProperties = { ...bodyStyle, minWidth: 0, flex: '1 1 auto' }
 
 function PreferenceToggle({
   checked,
@@ -235,10 +248,12 @@ export function OpenAICodexSettings({ t }: OpenAICodexSettingsProps) {
   const [responseApi, setResponseApi] = useState<ResponseApiPreferences | undefined>()
   const [responseApiBusy, setResponseApiBusy] = useState(false)
   const [responseApiError, setResponseApiError] = useState<string | undefined>()
-  const [proxyDraft, setProxyDraft] = useState('')
-  const [proxyBusy, setProxyBusy] = useState(false)
-  const [proxyError, setProxyError] = useState<string | undefined>()
-  const [proxySaved, setProxySaved] = useState(false)
+  const [vless, setVless] = useState<VlessStatus | undefined>()
+  const [vlessDraft, setVlessDraft] = useState('')
+  const [vlessBusy, setVlessBusy] = useState(false)
+  const [vlessSpeedBusy, setVlessSpeedBusy] = useState(false)
+  const [vlessError, setVlessError] = useState<string | undefined>()
+  const [vlessSaved, setVlessSaved] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -262,9 +277,9 @@ export function OpenAICodexSettings({ t }: OpenAICodexSettingsProps) {
     )
   }, [t])
   useEffect(() => {
-    void jsonRequest<{ proxyUrl: string }>(PROXY_PATH).then(
-      value => { setProxyDraft(value.proxyUrl); setProxyError(undefined) },
-      () => { setProxyError(t('proxySettingsFailed')) },
+    void jsonRequest<VlessStatus>(PROXY_PATH).then(
+      value => { setVless(value); setVlessError(undefined) },
+      () => { setVlessError(t('proxySettingsFailed')) },
     )
   }, [t])
   useEffect(() => {
@@ -332,18 +347,43 @@ export function OpenAICodexSettings({ t }: OpenAICodexSettingsProps) {
     }
   }
 
-  const saveProxy = async (): Promise<void> => {
-    setProxyBusy(true)
-    setProxyError(undefined)
-    setProxySaved(false)
+  const saveVless = async (): Promise<void> => {
+    setVlessBusy(true)
+    setVlessError(undefined)
+    setVlessSaved(false)
     try {
-      const value = await jsonRequest<{ proxyUrl: string }>(PROXY_PATH, 'POST', { proxyUrl: proxyDraft })
-      setProxyDraft(value.proxyUrl)
-      setProxySaved(true)
+      setVless(await jsonRequest<VlessStatus>(PROXY_PATH, 'POST', { vlessUrl: vlessDraft }))
+      setVlessDraft('')
+      setVlessSaved(true)
     } catch (error: unknown) {
-      setProxyError(error instanceof Error ? error.message : t('proxySettingsFailed'))
+      setVlessError(error instanceof Error ? error.message : t('proxySettingsFailed'))
     } finally {
-      setProxyBusy(false)
+      setVlessBusy(false)
+    }
+  }
+
+  const toggleVless = async (enabled: boolean): Promise<void> => {
+    setVlessBusy(true)
+    setVlessError(undefined)
+    setVlessSaved(false)
+    try {
+      setVless(await jsonRequest<VlessStatus>(PROXY_PATH, 'POST', { enabled }))
+    } catch (error: unknown) {
+      setVlessError(error instanceof Error ? error.message : t('proxySettingsFailed'))
+    } finally {
+      setVlessBusy(false)
+    }
+  }
+
+  const speedTestVless = async (): Promise<void> => {
+    setVlessSpeedBusy(true)
+    setVlessError(undefined)
+    try {
+      setVless(await jsonRequest<VlessStatus>(PROXY_PATH, 'POST', { speedTest: true }))
+    } catch (error: unknown) {
+      setVlessError(error instanceof Error ? error.message : t('vlessSpeedTestFailed'))
+    } finally {
+      setVlessSpeedBusy(false)
     }
   }
 
@@ -451,21 +491,56 @@ export function OpenAICodexSettings({ t }: OpenAICodexSettingsProps) {
           <h3 style={quotaTitleStyle}>{t('proxy')}</h3>
           <p style={{ ...bodyStyle, marginTop: 5 }}>{t('proxyHint')}</p>
         </div>
+        <div style={toggleRowStyle}>
+          <span style={toggleCopyStyle}>
+            <span style={statusStyle}>{t('useVless')}</span>
+            <span style={bodyStyle}>{t('useVlessHint')}</span>
+          </span>
+          <PreferenceToggle
+            label={t('useVless')}
+            disabled={vless === undefined || vlessBusy || vlessSpeedBusy || (!vless.configured && !vless.enabled)}
+            checked={vless?.enabled ?? false}
+            onChange={enabled => { void toggleVless(enabled) }}
+          />
+        </div>
+        {vless === undefined ? null : (
+          <div style={vlessStatusRowStyle}>
+            <p style={vlessStatusTextStyle}>
+              {vless.configured
+                ? t('vlessConfigured', { node: vless.node ?? t('vlessUnnamedNode') })
+                : t('vlessNotConfigured')}
+              {vless.pid === undefined ? '' : ` · ${t('vlessPid', { pid: vless.pid })}`}
+              {vless.configured ? ` · ${vless.reachable ? t('vlessReady') : t('vlessUnavailable')}` : ''}
+              {vless.latencyMs === undefined ? '' : ` · ${t('vlessLatency', { milliseconds: vless.latencyMs })}`}
+            </p>
+            <button
+              type="button"
+              style={{ ...buttonStyle, flex: '0 0 auto' }}
+              disabled={!vless.configured || vlessBusy || vlessSpeedBusy}
+              onClick={() => { void speedTestVless() }}
+            >
+              {vlessSpeedBusy ? t('vlessSpeedTesting') : t('vlessSpeedTest')}
+            </button>
+          </div>
+        )}
         <div style={rowStyle}>
           <input
-            type="text"
-            value={proxyDraft}
-            disabled={proxyBusy}
+            type="password"
+            value={vlessDraft}
+            disabled={vlessBusy || vlessSpeedBusy}
+            autoComplete="off"
+            placeholder={t('vlessLinkPlaceholder')}
+            aria-label={t('vlessLinkPlaceholder')}
             spellCheck={false}
-            onChange={event => { setProxyDraft(event.target.value); setProxySaved(false) }}
+            onChange={event => { setVlessDraft(event.target.value); setVlessSaved(false) }}
             style={inputStyle}
           />
-          <button type="button" style={primaryButtonStyle} disabled={proxyBusy} onClick={() => { void saveProxy() }}>
-            {proxyBusy ? t('working') : t('proxySave')}
+          <button type="button" style={primaryButtonStyle} disabled={vlessBusy || vlessSpeedBusy || vlessDraft.trim() === ''} onClick={() => { void saveVless() }}>
+            {vlessBusy ? t('working') : t('proxySave')}
           </button>
         </div>
-        {proxyError === undefined ? null : <p style={errorStyle}>{proxyError}</p>}
-        {proxySaved ? <p style={bodyStyle}>{t('proxySaved')}</p> : null}
+        {vlessError === undefined ? null : <p style={errorStyle}>{vlessError}</p>}
+        {vlessSaved ? <p style={bodyStyle}>{t('proxySaved')}</p> : null}
       </div>
     </section>
   )

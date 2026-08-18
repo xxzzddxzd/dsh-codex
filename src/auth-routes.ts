@@ -9,6 +9,7 @@ import type { OpenAICodexCredentialStore } from './store.ts'
 import type { ImageToolPolicy, ImageToolPreferences, ResponseApiPreferences } from './tool-policy.ts'
 import { readOpenAICodexRateLimits } from './usage.ts'
 import type { OpenAICodexUsage } from './usage.ts'
+import type { OpenAICodexService } from './service.ts'
 
 /** Plugin-owned status endpoint consumed by its browser half. */
 export const OPENAI_CODEX_AUTH_STATUS_PATH = '/plugins/dsh-openai-codex/auth/status'
@@ -36,6 +37,7 @@ interface LoginChallenge {
 /** Redact provider diagnostics before they cross to the browser. */
 function safeMessage(error: unknown): string {
   return (error instanceof Error ? error.message : String(error))
+    .replace(/vless:\/\/[^\s"'<>]+/giu, 'vless://[redacted]')
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/gu, '[redacted token]')
     .replace(/(\b(?:code|token|refresh_token|access_token)=)[^&\s]+/giu, '$1[redacted]')
     .slice(0, 1000)
@@ -222,6 +224,7 @@ export function registerOpenAICodexAuthRoutes(
   ctx: Context,
   store: OpenAICodexCredentialStore,
   imageTools: ImageToolPolicy,
+  service: OpenAICodexService,
 ): void {
   const auth = new OpenAICodexWebAuth(store)
   ctx.effect(() => {
@@ -291,12 +294,31 @@ export function registerOpenAICodexAuthRoutes(
         path: OPENAI_CODEX_PROXY_SETTINGS_PATH,
         handler: async (req, res) => {
           if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
-          if (req.method === 'GET') return json(res, 200, { proxyUrl: imageTools.proxySnapshot() })
+          if (req.method === 'GET') return json(res, 200, await service.vlessStatus())
           if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' })
           try {
             const body = await readJson(req)
-            if (typeof body.proxyUrl !== 'string') throw new Error('proxyUrl must be a string')
-            json(res, 200, { proxyUrl: await imageTools.updateProxy(body.proxyUrl) })
+            const allowed = new Set(['enabled', 'vlessUrl', 'speedTest'])
+            if (Object.keys(body).some(key => !allowed.has(key))) throw new Error('request contains an unknown VLESS setting')
+            if (body.speedTest !== undefined) {
+              if (body.speedTest !== true || Object.keys(body).length !== 1) {
+                throw new Error('speedTest must be the only setting and must be true')
+              }
+              const latencyMs = await service.vlessSpeedTest()
+              return json(res, 200, { ...await service.vlessStatus(), latencyMs })
+            }
+            if (body.vlessUrl !== undefined) {
+              if (typeof body.vlessUrl !== 'string' || body.vlessUrl.trim() === '') {
+                throw new Error('vlessUrl must be a non-empty string')
+              }
+              await service.vless.configure(body.vlessUrl)
+            }
+            if (body.enabled !== undefined) {
+              if (typeof body.enabled !== 'boolean') throw new Error('enabled must be a boolean')
+              return json(res, 200, await service.updateVlessEnabled(body.enabled))
+            }
+            if (body.vlessUrl === undefined) throw new Error('request must include enabled, vlessUrl, or speedTest')
+            json(res, 200, await service.vlessStatus())
           } catch (error: unknown) {
             json(res, 400, { error: safeMessage(error) })
           }

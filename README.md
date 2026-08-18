@@ -50,6 +50,12 @@ Codex, Claude Code, and other automation agents should follow [INSTALL.md](INSTA
 
 The bundle selects `openai-codex` / `gpt-5.6-sol` for new agents and selects the Codex search provider. A model already saved in dsh settings still takes precedence; the model picker can select any other Codex model visible to the signed-in account.
 
+## iPhone VLESS routing
+
+On the iPhone build with `com.xxzzddxzd.dsh-vless` installed, **Settings → OpenAI Codex** accepts a VLESS Reality link and exposes a separate routing switch. Saving validates the generated Xray config, restarts the loopback-only client, and tests an OpenAI HTTPS tunnel before replacing the previous node. The credential-bearing config stays at `/var/root/.config/dsh-vless/config.json` with mode `0600`; the browser receives only a redacted node label and health state.
+
+The switch affects OpenAI-owned and ChatGPT-owned hostnames only. When enabled, those requests fail closed if the local client is unavailable; DeepSeek, other providers, arbitrary `read_image` URLs, and Bash/Python subprocess traffic keep the original direct dispatcher. Turning the switch off makes Codex direct again without requiring Shadowrocket or taking over system traffic.
+
 ## Images
 
 Image support uses dsh's durable attachment path:

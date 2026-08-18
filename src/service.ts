@@ -12,6 +12,9 @@ import type {
 } from './tool-policy.ts'
 import { readOpenAICodexRateLimits } from './usage.ts'
 import type { OpenAICodexUsage } from './usage.ts'
+import { VlessController } from './vless-controller.ts'
+import type { VlessControllerOptions, VlessStatus } from './vless-controller.ts'
+import type { OpenAICodexProxyHandle } from './proxy.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -21,7 +24,9 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /** Initial settings contributed by the bundle configuration. */
-export interface OpenAICodexServiceOptions extends ImageToolPreferences, ResponseApiPreferences {}
+export interface OpenAICodexServiceOptions extends ImageToolPreferences, ResponseApiPreferences {
+  vless?: VlessControllerOptions
+}
 
 /**
  * One provider-owned host service shared by Web routes and terminal adapters.
@@ -30,14 +35,22 @@ export interface OpenAICodexServiceOptions extends ImageToolPreferences, Respons
 export class OpenAICodexService {
   readonly credentials = new OpenAICodexCredentialStore()
   readonly policy: ImageToolPolicy
+  readonly vless: VlessController
+  private proxy: OpenAICodexProxyHandle | undefined
 
   constructor(options: OpenAICodexServiceOptions) {
     this.policy = new ImageToolPolicy(options)
+    this.vless = new VlessController(options.vless)
   }
 
   /** Attach the durable settings document when the active profile provides it. */
   attachSettings(ctx: Context): void {
     this.policy.attach(ctx)
+  }
+
+  /** Attach the same long-lived proxy agent used by production Codex requests. */
+  attachProxy(proxy: OpenAICodexProxyHandle): void {
+    this.proxy = proxy
   }
 
   /** Start the provider-native OAuth lifecycle. */
@@ -76,14 +89,24 @@ export class OpenAICodexService {
     return this.policy.updateResponseApi(patch)
   }
 
-  /** Return the proxy URL currently applied to all Codex traffic. */
-  proxyUrl(): string {
-    return this.policy.proxySnapshot()
+  /** Read the public, secret-free VLESS state exposed in Settings. */
+  async vlessStatus(): Promise<VlessStatus & { enabled: boolean }> {
+    return { ...await this.vless.status(), enabled: this.policy.vlessSnapshot().useVless }
   }
 
-  /** Persist a new proxy URL; the global dispatcher re-applies it immediately. */
-  updateProxyUrl(proxyUrl: string): Promise<string> {
-    return this.policy.updateProxy(proxyUrl)
+  /** Persist the Codex-only VLESS routing switch after readiness is checked. */
+  async updateVlessEnabled(enabled: boolean): Promise<VlessStatus & { enabled: boolean }> {
+    if (enabled) await this.vless.ensureReady()
+    await this.policy.updateVless(enabled)
+    return this.vlessStatus()
+  }
+
+  /** Measure the warm, production VLESS agent rather than a temporary client. */
+  async vlessSpeedTest(): Promise<number> {
+    if (!await this.vless.status().then(status => status.configured)) {
+      throw new Error('Save and test a VLESS node before testing its speed')
+    }
+    if (this.proxy === undefined) throw new Error('OpenAI Codex proxy is unavailable')
+    return this.proxy.speedTest()
   }
 }
-

@@ -50,6 +50,12 @@ Codex、Claude Code 及其他自动化 agent 应直接遵循 [INSTALL.md](INSTAL
 
 bundle 会为新建 agent 选择 `openai-codex` / `gpt-5.6-sol`，并选择 Codex 搜索提供方。dsh settings 中已经保存的模型仍然优先；模型选择器可以切换到当前账号可用的其他 Codex 模型。
 
+## iPhone VLESS 分流
+
+在已经安装 `com.xxzzddxzd.dsh-vless` 的 iPhone 构建上，**设置 → OpenAI Codex** 可以直接粘贴 VLESS Reality 链接，并提供独立的启用开关。保存时会先校验生成的 Xray 配置、重启仅监听回环地址的客户端，并实际测试 OpenAI HTTPS 隧道；全部成功后才替换旧节点。含凭据的配置以 `0600` 权限保存在 `/var/root/.config/dsh-vless/config.json`，浏览器只能读取脱敏节点名称与健康状态。
+
+该开关只影响 OpenAI／ChatGPT 所属域名。开启后，本地客户端不可用时这些请求会 fail-closed；DeepSeek、其他模型提供方、任意 `read_image` URL，以及 Bash／Python 子进程仍使用原来的直连路径。关闭开关后 Codex 恢复直连，不需要启动 Shadowrocket，也不会接管系统流量。
+
 ## 图片
 
 图片功能使用 dsh 的持久附件路径：

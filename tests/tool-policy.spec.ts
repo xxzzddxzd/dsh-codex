@@ -41,9 +41,11 @@ describe('ImageToolPolicy', () => {
       useWebSocketContextReuse: false,
       useNativeCompaction: false,
     })
+    expect(policy.vlessSnapshot()).toEqual({ useVless: false })
 
     await policy.update({ shareImagegenWithOtherModels: false })
     await policy.updateResponseApi({ useNativeCompaction: true })
+    await policy.updateVless(true)
 
     expect(policy.snapshot()).toEqual({
       modifyReadImage: true,
@@ -53,6 +55,7 @@ describe('ImageToolPolicy', () => {
       useWebSocketContextReuse: false,
       useNativeCompaction: true,
     })
+    expect(policy.vlessSnapshot()).toEqual({ useVless: true })
   })
 
   it('notifies the read_image enhancer when its live setting changes', async () => {
