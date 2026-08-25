@@ -57,9 +57,14 @@ describe('OpenAI Codex real composition', () => {
     })
     await ctx.loader.await()
 
-    expect(ctx.llm.listProviders()).toEqual([{ id: 'openai-codex', name: 'OpenAI Codex' }])
+    expect(ctx.llm.listProviders()).toEqual([
+      { id: 'openai-codex', name: 'OpenAI Codex' },
+      { id: 'xai', name: 'xAI' },
+    ])
     const models = await ctx.llm.listModels('openai-codex')
     expect(models.some(model => model.id === 'gpt-5.6-sol')).toBe(true)
+    const xaiModels = await ctx.llm.listModels('xai')
+    expect(xaiModels.some(model => model.id.toLowerCase().includes('grok'))).toBe(true)
 
     const entry = [...ctx.loader.entries()].find(candidate => candidate.options.name === 'dsh-codex')
     if (entry === undefined) throw new Error('OpenAI Codex Loader entry missing')

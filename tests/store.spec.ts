@@ -6,6 +6,8 @@ import type { OAuthCredential } from '@earendil-works/pi-ai'
 import {
   OpenAICodexCredentialStore,
   OPENAI_CODEX_PROVIDER,
+  XaiCredentialStore,
+  XAI_PROVIDER,
 } from '../src/store.ts'
 
 let root: string | undefined
@@ -94,5 +96,20 @@ describe('OpenAICodexCredentialStore', () => {
     await expect(auth.modify('other', () => Promise.resolve(credential())))
       .rejects.toThrow(/does not own provider/)
     expect(await auth.read('other')).toBeUndefined()
+  })
+
+  it('stores xAI OAuth independently without requiring an OpenAI account id', async () => {
+    root = await mkdtemp(join(tmpdir(), 'dsh-xai-'))
+    const auth = new XaiCredentialStore(join(root, 'xai.json'))
+    const xaiCredential: OAuthCredential = {
+      type: 'oauth',
+      access: 'xai-access',
+      refresh: 'xai-refresh',
+      expires: Date.now() + 60_000,
+    }
+    await auth.modify(XAI_PROVIDER, () => Promise.resolve(xaiCredential))
+    expect(await auth.list()).toEqual([{ providerId: XAI_PROVIDER, type: 'oauth' }])
+    expect(await auth.read(XAI_PROVIDER)).toMatchObject({ access: 'xai-access' })
+    expect(await auth.read(OPENAI_CODEX_PROVIDER)).toBeUndefined()
   })
 })

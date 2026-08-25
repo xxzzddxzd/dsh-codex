@@ -2,11 +2,13 @@
 
 [English](README.md) | 中文
 
-通过 OpenAI Codex 登录流程，在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 中使用 ChatGPT 订阅：无需 OpenAI Platform API Key，也无需修改 dsh 源码。
+在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 中连接订阅 Provider，无需修改 DSH。bundle 包含 pi-ai 的 OpenAI Codex、xAI，以及来自 `@kelvinwww/dsh-oauth` 的 Google Code Assist OAuth。
 
 `dsh-codex` 是一个独立的 dsh bundle，提供：
 
 - 在 dsh 设置面板或独立 CLI 中完成 ChatGPT OAuth 登录，并自动刷新 token
+- 通过 pi-ai 原生 OAuth 使用 SuperGrok/X Premium 与 xAI 模型目录
+- 通过 `@kelvinwww/dsh-oauth` 使用 Google OAuth 与 Gemini Code Assist
 - Codex GPT 模型目录；账号提供视觉模型时自动声明其图片输入能力
 - 经标准 LLM 服务运行的流式响应、工具调用、推理回放、提示词缓存与 dsh 压缩
 - 通过 dsh 现有 `web_search` 工具使用 Codex 独立联网搜索
@@ -27,7 +29,7 @@ dsh web
 
 从 DeepSeek Harness 源码 checkout 运行时，使用 `pnpm dsh plugin --profile web add dsh-codex`。开发插件时仍可用 `link:/absolute/path/to/dsh-codex` 安装本地 checkout。
 
-打开 **设置 → OpenAI Codex → 使用 ChatGPT 登录**。插件会打开 OpenAI 授权页面，并通过 localhost 回调完成登录。账号页面会显示实时 Codex 额度进度条与精确剩余百分比；只有账号接口提供信用余额或工作区限额时，才会一并显示精确数值。
+打开 **设置 → Provider**，选择 OpenAI Codex、xAI 或 Google OAuth，再在各自子页登录。Google 需要配置 `GEMINI_CLIENT_ID` 和 `GEMINI_CLIENT_SECRET`；非免费 Code Assist 还需要 `GOOGLE_CLOUD_PROJECT` 或 `GOOGLE_CLOUD_PROJECT_ID`。Google 使用动态本机回调端口，因此 iPhone 部署应在 iPhone Safari 中完成授权；通过 Mac 的 USB `3081` 页面发起授权时，回调会落到 Mac 而不是手机。
 
 终端和无界面环境仍可使用 CLI：
 
@@ -50,11 +52,11 @@ Codex、Claude Code 及其他自动化 agent 应直接遵循 [INSTALL.md](INSTAL
 
 bundle 会为新建 agent 选择 `openai-codex` / `gpt-5.6-sol`，并选择 Codex 搜索提供方。dsh settings 中已经保存的模型仍然优先；模型选择器可以切换到当前账号可用的其他 Codex 模型。
 
-## iPhone VLESS 分流
+## Provider VLESS 分流
 
-在已经安装 `com.xxzzddxzd.dsh-vless` 的 iPhone 构建上，**设置 → OpenAI Codex** 可以直接粘贴 VLESS Reality 链接，并提供独立的启用开关。保存时会先校验生成的 Xray 配置、重启仅监听回环地址的客户端，并实际测试 OpenAI HTTPS 隧道；全部成功后才替换旧节点。含凭据的配置以 `0600` 权限保存在 `/var/root/.config/dsh-vless/config.json`，浏览器只能读取脱敏节点名称与健康状态。
+在已经安装 `com.xxzzddxzd.dsh-vless` 的 iPhone 构建上，先在 **设置 → VLESS** 配置并测试节点，再进入 **设置 → Provider** 的任一子页选择直连或 VLESS。三个 Provider 独立保存出口；替换节点不会改动这些选择。含凭据的配置以 `0600` 权限保存在 `/var/root/.config/dsh-vless/config.json`，浏览器只能读取脱敏节点名称与健康状态。
 
-该开关只影响 OpenAI／ChatGPT 所属域名。开启后，本地客户端不可用时这些请求会 fail-closed；DeepSeek、其他模型提供方、任意 `read_image` URL，以及 Bash／Python 子进程仍使用原来的直连路径。关闭开关后 Codex 恢复直连，不需要启动 Shadowrocket，也不会接管系统流量。
+分流只匹配当前 Provider 的服务域名：OpenAI／ChatGPT、xAI 与 Google 各自服从自己的选择。DeepSeek、任意 `read_image` URL，以及 Bash／Python 子进程仍保持直连。Google 的 OAuth 换码、token 刷新、模型发现和生成请求共用 Google 子页的出口。
 
 ## 图片
 

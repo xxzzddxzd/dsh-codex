@@ -6,7 +6,13 @@
 import { createModels } from '@earendil-works/pi-ai'
 import type { AuthInteraction } from '@earendil-works/pi-ai'
 import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-codex'
-import { OpenAICodexCredentialStore, OPENAI_CODEX_PROVIDER } from './store.ts'
+import { xaiProvider } from '@earendil-works/pi-ai/providers/xai'
+import {
+  OpenAICodexCredentialStore,
+  OPENAI_CODEX_PROVIDER,
+  XaiCredentialStore,
+  XAI_PROVIDER,
+} from './store.ts'
 
 /** Non-secret login state shown by the launcher. */
 export interface OpenAICodexAuthStatus {
@@ -15,6 +21,9 @@ export interface OpenAICodexAuthStatus {
   /** Access-token expiry time; refresh is automatic on the next request. */
   expiresAt?: Date
 }
+
+/** Non-secret status shared by the xAI subscription page. */
+export type XaiAuthStatus = OpenAICodexAuthStatus
 
 /**
  * Complete provider-native OAuth and persist the resulting credential.
@@ -49,6 +58,33 @@ export async function openAICodexAuthStatus(
   store: OpenAICodexCredentialStore = new OpenAICodexCredentialStore(),
 ): Promise<OpenAICodexAuthStatus> {
   const credential = await store.read(OPENAI_CODEX_PROVIDER)
+  return credential?.type === 'oauth'
+    ? { authenticated: true, expiresAt: new Date(credential.expires) }
+    : { authenticated: false }
+}
+
+/** Complete pi-ai's native SuperGrok/X Premium device-code flow. */
+export async function loginXai(
+  interaction: AuthInteraction,
+  store: XaiCredentialStore = new XaiCredentialStore(),
+): Promise<void> {
+  const models = createModels({ credentials: store })
+  models.setProvider(xaiProvider())
+  await models.login(XAI_PROVIDER, 'oauth', interaction)
+}
+
+/** Remove only the xAI credential owned by this bundle. */
+export async function logoutXai(
+  store: XaiCredentialStore = new XaiCredentialStore(),
+): Promise<void> {
+  await store.delete(XAI_PROVIDER)
+}
+
+/** Read xAI login state without exposing or refreshing tokens. */
+export async function xaiAuthStatus(
+  store: XaiCredentialStore = new XaiCredentialStore(),
+): Promise<XaiAuthStatus> {
+  const credential = await store.read(XAI_PROVIDER)
   return credential?.type === 'oauth'
     ? { authenticated: true, expiresAt: new Date(credential.expires) }
     : { authenticated: false }

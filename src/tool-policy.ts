@@ -3,7 +3,12 @@ import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import type { SettingsScope } from '@deepseek-ai/dsh-settings'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import z from '@deepseek-ai/schemastery'
-import { OPENAI_CODEX_PROVIDER } from './store.ts'
+import {
+  GOOGLE_OAUTH_PROVIDER,
+  OPENAI_CODEX_PROVIDER,
+  XAI_PROVIDER,
+} from './provider-ids.ts'
+import type { ManagedProvider } from './provider-ids.ts'
 
 /** User-controlled image-tool integration. */
 export interface ImageToolPreferences {
@@ -25,6 +30,10 @@ export interface VlessPreferences {
 interface OpenAICodexPreferences extends ImageToolPreferences, ResponseApiPreferences, VlessPreferences {
   /** Migration-only key written by the unreleased store:true experiment. */
   useStatefulResponses: boolean
+  /** Whether xAI requests use the shared device-local VLESS client. */
+  useXaiVless: boolean
+  /** Whether Google Code Assist requests use the shared device-local VLESS client. */
+  useGoogleVless: boolean
 }
 
 /** Defaults keep generic vision-model interoperability enabled. */
@@ -52,6 +61,8 @@ const schema: z<OpenAICodexPreferences> = z.object({
   useStatefulResponses: z.boolean().default(false),
   useNativeCompaction: z.boolean().default(false),
   useVless: z.boolean().default(false),
+  useXaiVless: z.boolean().default(false),
+  useGoogleVless: z.boolean().default(false),
 })
 
 /** Live policy shared by the host tools, Codex adapter, and settings HTTP surface. */
@@ -66,6 +77,8 @@ export class ImageToolPolicy {
       ...DEFAULT_RESPONSE_API_PREFERENCES,
       ...DEFAULT_VLESS_PREFERENCES,
       useStatefulResponses: false,
+      useXaiVless: false,
+      useGoogleVless: false,
       ...base,
     }
     if (this.current.useStatefulResponses && base.useWebSocketContextReuse === undefined) {
@@ -104,12 +117,34 @@ export class ImageToolPolicy {
     return { useVless: this.current.useVless }
   }
 
+  /** Return whether one managed provider currently uses VLESS. */
+  providerVlessSnapshot(provider: ManagedProvider): VlessPreferences {
+    switch (provider) {
+      case OPENAI_CODEX_PROVIDER: return { useVless: this.current.useVless }
+      case XAI_PROVIDER: return { useVless: this.current.useXaiVless }
+      case GOOGLE_OAUTH_PROVIDER: return { useVless: this.current.useGoogleVless }
+    }
+  }
+
   /** Persist the Codex-only VLESS routing switch. */
   async updateVless(useVless: boolean): Promise<VlessPreferences> {
     if (this.scope === undefined) throw new Error('OpenAI Codex settings service is unavailable')
     await this.scope.update({ useVless })
     this.replace(this.scope.get())
     return this.vlessSnapshot()
+  }
+
+  /** Persist one provider's independent VLESS selection. */
+  async updateProviderVless(provider: ManagedProvider, useVless: boolean): Promise<VlessPreferences> {
+    if (this.scope === undefined) throw new Error('Provider settings service is unavailable')
+    const patch = provider === OPENAI_CODEX_PROVIDER
+      ? { useVless }
+      : provider === XAI_PROVIDER
+        ? { useXaiVless: useVless }
+        : { useGoogleVless: useVless }
+    await this.scope.update(patch)
+    this.replace(this.scope.get())
+    return this.providerVlessSnapshot(provider)
   }
 
   /** Persist a partial browser update through the settings service. */

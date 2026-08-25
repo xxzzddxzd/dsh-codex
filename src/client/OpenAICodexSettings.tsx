@@ -6,13 +6,14 @@ import type { OpenAICodexUsage } from '../usage.ts'
 import type { ImageToolPreferences } from '../tool-policy.ts'
 import type { ResponseApiPreferences } from '../tool-policy.ts'
 import type { OpenAICodexSettingsKey } from './locales.ts'
+import { vlessRequest } from './VlessSettings.tsx'
+import type { CodexEgress, VlessStatus } from './VlessSettings.tsx'
 
 const STATUS_PATH = '/plugins/dsh-openai-codex/auth/status'
 const LOGIN_PATH = '/plugins/dsh-openai-codex/auth/login'
 const LOGOUT_PATH = '/plugins/dsh-openai-codex/auth/logout'
 const IMAGE_TOOLS_PATH = '/plugins/dsh-openai-codex/image-tools'
 const RESPONSE_API_PATH = '/plugins/dsh-openai-codex/response-api'
-const PROXY_PATH = '/plugins/dsh-openai-codex/proxy'
 const POLL_INTERVAL_MS = 1_000
 const USAGE_POLL_INTERVAL_MS = 60_000
 
@@ -27,17 +28,6 @@ interface LoginChallenge {
   url: string
 }
 
-interface VlessStatus {
-  enabled: boolean
-  configured: boolean
-  running: boolean
-  reachable: boolean
-  pid?: number
-  latencyMs?: number
-  node?: string
-  message?: string
-}
-
 /** Dependencies injected by the browser plugin entry. */
 export interface OpenAICodexSettingsInjected {
   /** Localized page copy. */
@@ -45,7 +35,10 @@ export interface OpenAICodexSettingsInjected {
 }
 
 /** Props delivered by the settings slot renderer. */
-export type OpenAICodexSettingsProps = Partial<OpenAICodexSettingsInjected>
+export type OpenAICodexSettingsProps = Partial<OpenAICodexSettingsInjected> & {
+  /** Parent Provider subpage already renders the title and source. */
+  hideHeader?: boolean
+}
 
 const pageStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 720 }
 const titleStyle: CSSProperties = { margin: 0, fontSize: 20, lineHeight: '28px', fontWeight: 600, color: 'var(--dsw-alias-label-primary)' }
@@ -55,7 +48,7 @@ const rowStyle: CSSProperties = { display: 'flex', alignItems: 'center', justify
 const statusStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 9, fontSize: 15, fontWeight: 500, color: 'var(--dsw-alias-label-primary)' }
 const buttonStyle: CSSProperties = { boxSizing: 'border-box', minHeight: 34, padding: '6px 14px', border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 18, background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 14, cursor: 'pointer' }
 const primaryButtonStyle: CSSProperties = { ...buttonStyle, borderColor: 'var(--dsw-alias-button-primary-fill)', background: 'var(--dsw-alias-button-primary-fill)', color: 'var(--dsw-alias-label-primary-foreground)' }
-const inputStyle: CSSProperties = { boxSizing: 'border-box', flex: '1 1 280px', minHeight: 34, padding: '6px 10px', border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 14 }
+const selectStyle: CSSProperties = { boxSizing: 'border-box', minWidth: 220, minHeight: 36, padding: '6px 34px 6px 10px', border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 14 }
 const errorStyle: CSSProperties = { ...bodyStyle, color: 'var(--dsw-alias-state-error-primary)' }
 const quotaListStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 18, paddingTop: 2 }
 const quotaGroupStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 10 }
@@ -65,8 +58,6 @@ const progressTrackStyle: CSSProperties = { height: 8, overflow: 'hidden', borde
 const toggleRowStyle: CSSProperties = { ...rowStyle, flexWrap: 'nowrap', alignItems: 'flex-start' }
 const toggleCopyStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 3 }
 const toggleTrackStyle: CSSProperties = { position: 'relative', width: 40, height: 22, flex: '0 0 auto', marginTop: 1, padding: 0, border: 0, borderRadius: 999, cursor: 'pointer', transition: 'background 120ms ease' }
-const vlessStatusRowStyle: CSSProperties = { ...rowStyle, flexWrap: 'nowrap' }
-const vlessStatusTextStyle: CSSProperties = { ...bodyStyle, minWidth: 0, flex: '1 1 auto' }
 
 function PreferenceToggle({
   checked,
@@ -238,7 +229,7 @@ async function jsonRequest<T>(path: string, method = 'GET', body?: unknown): Pro
 }
 
 /** OpenAI Codex account status and OAuth actions. */
-export function OpenAICodexSettings({ t }: OpenAICodexSettingsProps) {
+export function OpenAICodexSettings({ t, hideHeader = false }: OpenAICodexSettingsProps) {
   if (t === undefined) throw new Error('OpenAI Codex settings requires its translation function')
   const [status, setStatus] = useState<AccountStatus>({ status: 'loading' })
   const [busy, setBusy] = useState(false)
@@ -249,11 +240,8 @@ export function OpenAICodexSettings({ t }: OpenAICodexSettingsProps) {
   const [responseApiBusy, setResponseApiBusy] = useState(false)
   const [responseApiError, setResponseApiError] = useState<string | undefined>()
   const [vless, setVless] = useState<VlessStatus | undefined>()
-  const [vlessDraft, setVlessDraft] = useState('')
-  const [vlessBusy, setVlessBusy] = useState(false)
-  const [vlessSpeedBusy, setVlessSpeedBusy] = useState(false)
-  const [vlessError, setVlessError] = useState<string | undefined>()
-  const [vlessSaved, setVlessSaved] = useState(false)
+  const [egressBusy, setEgressBusy] = useState(false)
+  const [egressError, setEgressError] = useState<string | undefined>()
 
   const refresh = useCallback(async () => {
     try {
@@ -277,9 +265,9 @@ export function OpenAICodexSettings({ t }: OpenAICodexSettingsProps) {
     )
   }, [t])
   useEffect(() => {
-    void jsonRequest<VlessStatus>(PROXY_PATH).then(
-      value => { setVless(value); setVlessError(undefined) },
-      () => { setVlessError(t('proxySettingsFailed')) },
+    void vlessRequest().then(
+      value => { setVless(value); setEgressError(undefined) },
+      () => { setEgressError(t('egressSettingsFailed')) },
     )
   }, [t])
   useEffect(() => {
@@ -347,43 +335,15 @@ export function OpenAICodexSettings({ t }: OpenAICodexSettingsProps) {
     }
   }
 
-  const saveVless = async (): Promise<void> => {
-    setVlessBusy(true)
-    setVlessError(undefined)
-    setVlessSaved(false)
+  const updateEgress = async (egress: CodexEgress): Promise<void> => {
+    setEgressBusy(true)
+    setEgressError(undefined)
     try {
-      setVless(await jsonRequest<VlessStatus>(PROXY_PATH, 'POST', { vlessUrl: vlessDraft }))
-      setVlessDraft('')
-      setVlessSaved(true)
-    } catch (error: unknown) {
-      setVlessError(error instanceof Error ? error.message : t('proxySettingsFailed'))
+      setVless(await vlessRequest('POST', { egress }))
+    } catch (cause: unknown) {
+      setEgressError(cause instanceof Error ? cause.message : t('egressSettingsFailed'))
     } finally {
-      setVlessBusy(false)
-    }
-  }
-
-  const toggleVless = async (enabled: boolean): Promise<void> => {
-    setVlessBusy(true)
-    setVlessError(undefined)
-    setVlessSaved(false)
-    try {
-      setVless(await jsonRequest<VlessStatus>(PROXY_PATH, 'POST', { enabled }))
-    } catch (error: unknown) {
-      setVlessError(error instanceof Error ? error.message : t('proxySettingsFailed'))
-    } finally {
-      setVlessBusy(false)
-    }
-  }
-
-  const speedTestVless = async (): Promise<void> => {
-    setVlessSpeedBusy(true)
-    setVlessError(undefined)
-    try {
-      setVless(await jsonRequest<VlessStatus>(PROXY_PATH, 'POST', { speedTest: true }))
-    } catch (error: unknown) {
-      setVlessError(error instanceof Error ? error.message : t('vlessSpeedTestFailed'))
-    } finally {
-      setVlessSpeedBusy(false)
+      setEgressBusy(false)
     }
   }
 
@@ -399,10 +359,10 @@ export function OpenAICodexSettings({ t }: OpenAICodexSettingsProps) {
 
   return (
     <section style={pageStyle} aria-labelledby="openai-codex-settings-title">
-      <div>
+      {hideHeader ? null : <div>
         <h2 id="openai-codex-settings-title" style={titleStyle}>{t('title')}</h2>
         <p style={{ ...bodyStyle, marginTop: 6 }}>{t('intro')}</p>
-      </div>
+      </div>}
       <div style={cardStyle}>
         <div style={rowStyle}>
           <div style={statusStyle} role="status">
@@ -488,59 +448,30 @@ export function OpenAICodexSettings({ t }: OpenAICodexSettingsProps) {
       </div>
       <div style={cardStyle}>
         <div>
-          <h3 style={quotaTitleStyle}>{t('proxy')}</h3>
-          <p style={{ ...bodyStyle, marginTop: 5 }}>{t('proxyHint')}</p>
+          <h3 style={quotaTitleStyle}>{t('networkEgress')}</h3>
+          <p style={{ ...bodyStyle, marginTop: 5 }}>{t('networkEgressHint')}</p>
         </div>
-        <div style={toggleRowStyle}>
-          <span style={toggleCopyStyle}>
-            <span style={statusStyle}>{t('useVless')}</span>
-            <span style={bodyStyle}>{t('useVlessHint')}</span>
-          </span>
-          <PreferenceToggle
-            label={t('useVless')}
-            disabled={vless === undefined || vlessBusy || vlessSpeedBusy || (!vless.configured && !vless.enabled)}
-            checked={vless?.enabled ?? false}
-            onChange={enabled => { void toggleVless(enabled) }}
-          />
-        </div>
-        {vless === undefined ? null : (
-          <div style={vlessStatusRowStyle}>
-            <p style={vlessStatusTextStyle}>
-              {vless.configured
-                ? t('vlessConfigured', { node: vless.node ?? t('vlessUnnamedNode') })
-                : t('vlessNotConfigured')}
-              {vless.pid === undefined ? '' : ` · ${t('vlessPid', { pid: vless.pid })}`}
-              {vless.configured ? ` · ${vless.reachable ? t('vlessReady') : t('vlessUnavailable')}` : ''}
-              {vless.latencyMs === undefined ? '' : ` · ${t('vlessLatency', { milliseconds: vless.latencyMs })}`}
-            </p>
-            <button
-              type="button"
-              style={{ ...buttonStyle, flex: '0 0 auto' }}
-              disabled={!vless.configured || vlessBusy || vlessSpeedBusy}
-              onClick={() => { void speedTestVless() }}
-            >
-              {vlessSpeedBusy ? t('vlessSpeedTesting') : t('vlessSpeedTest')}
-            </button>
-          </div>
-        )}
         <div style={rowStyle}>
-          <input
-            type="password"
-            value={vlessDraft}
-            disabled={vlessBusy || vlessSpeedBusy}
-            autoComplete="off"
-            placeholder={t('vlessLinkPlaceholder')}
-            aria-label={t('vlessLinkPlaceholder')}
-            spellCheck={false}
-            onChange={event => { setVlessDraft(event.target.value); setVlessSaved(false) }}
-            style={inputStyle}
-          />
-          <button type="button" style={primaryButtonStyle} disabled={vlessBusy || vlessSpeedBusy || vlessDraft.trim() === ''} onClick={() => { void saveVless() }}>
-            {vlessBusy ? t('working') : t('proxySave')}
-          </button>
+          <label htmlFor="openai-codex-egress" style={statusStyle}>{t('networkEgressLabel')}</label>
+          <select
+            id="openai-codex-egress"
+            value={vless?.egress ?? (vless?.enabled === true ? 'vless' : 'direct')}
+            disabled={vless === undefined || egressBusy}
+            style={selectStyle}
+            onChange={event => { void updateEgress(event.target.value as CodexEgress) }}
+          >
+            <option value="direct">{t('egressDirect')}</option>
+            <option value="vless" disabled={vless?.configured !== true}>
+              {vless?.configured === true
+                ? t('egressVlessNode', { node: vless.node ?? t('egressVless') })
+                : t('egressVlessNotConfigured')}
+            </option>
+          </select>
         </div>
-        {vlessError === undefined ? null : <p style={errorStyle}>{vlessError}</p>}
-        {vlessSaved ? <p style={bodyStyle}>{t('proxySaved')}</p> : null}
+        <p style={bodyStyle}>{vless?.configured === true
+          ? t('egressVlessStatus', { status: vless.reachable ? t('egressReady') : t('egressUnavailable') })
+          : t('egressConfigureHint')}</p>
+        {egressError === undefined ? null : <p style={errorStyle}>{egressError}</p>}
       </div>
     </section>
   )

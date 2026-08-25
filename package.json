@@ -1,7 +1,7 @@
 {
   "name": "dsh-codex",
-  "description": "ChatGPT OAuth, Codex models, search, read_image URL support, and gpt-image-2 generation for DeepSeek Harness",
-  "version": "0.2.5-iphone.5",
+  "description": "OpenAI Codex, xAI, and Google OAuth providers with per-provider VLESS routing for DeepSeek Harness",
+  "version": "0.2.5-iphone.7",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
@@ -91,6 +91,7 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@kelvinwww/dsh-oauth": "0.1.1",
     "@earendil-works/pi-ai": "0.82.1",
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/cordis-plugin-include": "1.0.6",

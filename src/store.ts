@@ -8,12 +8,15 @@ import { dirname, join, resolve } from 'node:path'
 import type { Credential, CredentialInfo, CredentialStore, OAuthCredential } from '@earendil-works/pi-ai'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
+import { OPENAI_CODEX_PROVIDER, XAI_PROVIDER } from './provider-ids.ts'
 
 /** Provider route and pi-ai provider id owned by this bundle. */
-export const OPENAI_CODEX_PROVIDER = 'openai-codex'
+export { OPENAI_CODEX_PROVIDER, XAI_PROVIDER } from './provider-ids.ts'
 
 /** Basename of the OAuth document inside the Harness home. */
 export const OPENAI_CODEX_AUTH_FILENAME = '.openai-codex-auth.json'
+/** Basename of the independent xAI OAuth document inside the Harness home. */
+export const XAI_AUTH_FILENAME = '.xai-auth.json'
 
 /** Current on-disk format; pre-release readers reject every other version. */
 const AUTH_FORMAT_VERSION = 1
@@ -29,7 +32,7 @@ function isENOENT(error: unknown): boolean {
 }
 
 /** Reject a credential document readable by another POSIX user. */
-async function assertOwnerOnly(filename: string): Promise<void> {
+async function assertOwnerOnly(filename: string, label = OPENAI_CODEX_PROVIDER): Promise<void> {
   let mode: number
   try {
     mode = (await stat(filename)).mode
@@ -42,7 +45,7 @@ async function assertOwnerOnly(filename: string): Promise<void> {
   /* v8 ignore start -- POSIX tests cover this branch; Windows cannot express it */
   if ((mode & 0o077) !== 0) {
     throw new Error(
-      `openai-codex: ${filename} is readable beyond its owner (mode ${(mode & 0o777).toString(8)});`
+      `${label}: ${filename} is readable beyond its owner (mode ${(mode & 0o777).toString(8)});`
       + ` run "chmod 600 ${filename}" before starting again`,
     )
   }
@@ -50,39 +53,42 @@ async function assertOwnerOnly(filename: string): Promise<void> {
 }
 
 /** Validate the strict JSON document without quoting token-bearing input. */
-function parseDocument(text: string, filename: string): AuthDocument {
+function parseDocument(text: string, filename: string, label: string): AuthDocument {
   let value: unknown
   try {
     value = JSON.parse(text)
   } catch {
-    throw new Error(`openai-codex: ${filename} is not valid JSON`)
+    throw new Error(`${label}: ${filename} is not valid JSON`)
   }
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new Error(`openai-codex: ${filename} must contain an object`)
+    throw new Error(`${label}: ${filename} must contain an object`)
   }
   const document = value as Record<string, unknown>
   if (document['version'] !== AUTH_FORMAT_VERSION) {
-    throw new Error(`openai-codex: ${filename} has unsupported auth format version ${String(document['version'])}`)
+    throw new Error(`${label}: ${filename} has unsupported auth format version ${String(document['version'])}`)
   }
   if (Object.keys(document).some(key => key !== 'version' && key !== 'credential')) {
-    throw new Error(`openai-codex: ${filename} contains an unknown top-level field`)
+    throw new Error(`${label}: ${filename} contains an unknown top-level field`)
   }
   const raw = document['credential']
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    throw new Error(`openai-codex: ${filename} credential must be an object`)
+    throw new Error(`${label}: ${filename} credential must be an object`)
   }
   const credential = raw as Record<string, unknown>
   if (Object.keys(credential).some(key => !['type', 'access', 'refresh', 'expires', 'accountId'].includes(key))) {
-    throw new Error(`openai-codex: ${filename} credential contains an unknown field`)
+    throw new Error(`${label}: ${filename} credential contains an unknown field`)
   }
-  if (credential['type'] !== 'oauth') throw new Error(`openai-codex: ${filename} credential type must be oauth`)
-  for (const key of ['access', 'refresh', 'accountId'] as const) {
+  if (credential['type'] !== 'oauth') throw new Error(`${label}: ${filename} credential type must be oauth`)
+  for (const key of ['access', 'refresh'] as const) {
     if (typeof credential[key] !== 'string' || credential[key].length === 0) {
-      throw new Error(`openai-codex: ${filename} credential ${key} must be a non-empty string`)
+      throw new Error(`${label}: ${filename} credential ${key} must be a non-empty string`)
     }
   }
+  if (credential['accountId'] !== undefined && (typeof credential['accountId'] !== 'string' || credential['accountId'].length === 0)) {
+    throw new Error(`${label}: ${filename} credential accountId must be a non-empty string`)
+  }
   if (typeof credential['expires'] !== 'number' || !Number.isFinite(credential['expires']) || credential['expires'] <= 0) {
-    throw new Error(`openai-codex: ${filename} credential expires must be a positive finite number`)
+    throw new Error(`${label}: ${filename} credential expires must be a positive finite number`)
   }
   return { version: AUTH_FORMAT_VERSION, credential: credential as unknown as OAuthCredential }
 }
@@ -101,6 +107,11 @@ export function openAICodexAuthPath(dshHome?: string): string {
   return resolve(join(resolveDshHome(dshHome), OPENAI_CODEX_AUTH_FILENAME))
 }
 
+/** Resolve the default xAI OAuth document path. */
+export function xaiAuthPath(dshHome?: string): string {
+  return resolve(join(resolveDshHome(dshHome), XAI_AUTH_FILENAME))
+}
+
 /** File-backed pi-ai store scoped to the single OpenAI Codex provider. */
 export class OpenAICodexCredentialStore implements CredentialStore {
   /** Absolute credential document path. */
@@ -109,13 +120,16 @@ export class OpenAICodexCredentialStore implements CredentialStore {
   /**
    * @param filename - explicit document path, defaulting under `$DSH_HOME`.
    */
-  constructor(filename: string = openAICodexAuthPath()) {
+  constructor(
+    filename: string = openAICodexAuthPath(),
+    private readonly providerId: string = OPENAI_CODEX_PROVIDER,
+  ) {
     this.filename = resolve(filename)
   }
 
   /** Read and validate the current document without acquiring the writer lock. */
   private async readCurrent(): Promise<OAuthCredential | undefined> {
-    await assertOwnerOnly(this.filename)
+    await assertOwnerOnly(this.filename, this.providerId)
     let text: string
     try {
       text = await readFile(this.filename, 'utf8')
@@ -123,19 +137,19 @@ export class OpenAICodexCredentialStore implements CredentialStore {
       if (isENOENT(error)) return undefined
       throw error
     }
-    return cloneCredential(parseDocument(text, this.filename).credential)
+    return cloneCredential(parseDocument(text, this.filename, this.providerId).credential)
   }
 
   /** @inheritdoc */
   async read(providerId: string): Promise<Credential | undefined> {
-    return providerId === OPENAI_CODEX_PROVIDER ? this.readCurrent() : undefined
+    return providerId === this.providerId ? this.readCurrent() : undefined
   }
 
   /** @inheritdoc */
   async list(): Promise<readonly CredentialInfo[]> {
     return await this.readCurrent() === undefined
       ? []
-      : [{ providerId: OPENAI_CODEX_PROVIDER, type: 'oauth' }]
+      : [{ providerId: this.providerId, type: 'oauth' }]
   }
 
   /** @inheritdoc */
@@ -143,8 +157,8 @@ export class OpenAICodexCredentialStore implements CredentialStore {
     providerId: string,
     fn: (current: Credential | undefined) => Promise<Credential | undefined>,
   ): Promise<Credential | undefined> {
-    if (providerId !== OPENAI_CODEX_PROVIDER) {
-      throw new Error(`openai-codex: credential store does not own provider "${providerId}"`)
+    if (providerId !== this.providerId) {
+      throw new Error(`${this.providerId}: credential store does not own provider "${providerId}"`)
     }
     await mkdir(dirname(this.filename), { recursive: true, mode: 0o700 })
     return withFileLock(this.filename, async () => {
@@ -154,7 +168,7 @@ export class OpenAICodexCredentialStore implements CredentialStore {
       const document = parseDocument(JSON.stringify({
         version: AUTH_FORMAT_VERSION,
         credential: candidate,
-      }), this.filename)
+      }), this.filename, this.providerId)
       await writeFileAtomic(this.filename, `${JSON.stringify(document, null, 2)}\n`, {
         mode: 0o600,
         dirMode: 0o700,
@@ -165,8 +179,15 @@ export class OpenAICodexCredentialStore implements CredentialStore {
 
   /** @inheritdoc */
   async delete(providerId: string): Promise<void> {
-    if (providerId !== OPENAI_CODEX_PROVIDER) return
+    if (providerId !== this.providerId) return
     await mkdir(dirname(this.filename), { recursive: true, mode: 0o700 })
     await withFileLock(this.filename, () => rm(this.filename, { force: true }))
+  }
+}
+
+/** File-backed pi-ai credential store dedicated to the xAI OAuth route. */
+export class XaiCredentialStore extends OpenAICodexCredentialStore {
+  constructor(filename: string = xaiAuthPath()) {
+    super(filename, XAI_PROVIDER)
   }
 }

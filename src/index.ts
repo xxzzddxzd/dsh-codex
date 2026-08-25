@@ -7,6 +7,10 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
 import z from '@deepseek-ai/schemastery'
+import {
+  createGeminiService,
+  GeminiCliAdapter,
+} from '@kelvinwww/dsh-oauth/gemini'
 import type {} from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-session'
@@ -14,8 +18,8 @@ import type {} from '@deepseek-ai/dsh-web'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-fs'
-import { installOpenAICodexProxy } from './proxy.ts'
-import { createOpenAICodexAdapter } from './adapter.ts'
+import { installProviderProxy } from './proxy.ts'
+import { createOpenAICodexAdapter, createXaiAdapter } from './adapter.ts'
 import { registerOpenAICodexAuthRoutes } from './auth-routes.ts'
 import { installReadImageEnhancement } from './read-image-enhancement.ts'
 import { imagegenTool } from './imagegen.ts'
@@ -63,6 +67,9 @@ import {
 import type { OpenAICodexSearchContextSize, OpenAICodexSearchMode } from './search.ts'
 import { OpenAICodexCredentialStore, OPENAI_CODEX_PROVIDER } from './store.ts'
 import { OpenAICodexService } from './service.ts'
+import { GOOGLE_OAUTH_PROVIDER, XAI_PROVIDER } from './provider-ids.ts'
+import type { LlmAdapter } from '@deepseek-ai/dsh-llm'
+import { createRoutedGeminiOAuthClient } from './google-oauth.ts'
 
 export { OpenAICodexService } from './service.ts'
 export type { OpenAICodexServiceOptions } from './service.ts'
@@ -144,9 +151,9 @@ export function apply(ctx: Context, config: Config): void {
     useWebSocketContextReuse: config.useWebSocketContextReuse ?? false,
     useNativeCompaction: config.useNativeCompaction ?? false,
   })
-  const proxy = installOpenAICodexProxy(() => service.policy.vlessSnapshot().useVless)
+  const proxy = installProviderProxy(provider => service.policy.providerVlessSnapshot(provider).useVless)
   service.attachProxy(proxy)
-  ctx.effect(() => () => { proxy.dispose() }, 'dsh-openai-codex: selective VLESS proxy')
+  ctx.effect(() => () => { proxy.dispose() }, 'dsh-providers: selective VLESS proxy')
   const credentials = service.credentials
   const imageTools = service.policy
   ctx.provide('openAICodex', service)
@@ -159,6 +166,32 @@ export function apply(ctx: Context, config: Config): void {
       () => imageTools.responseApiSnapshot(),
     ),
   )
+  ctx.llm.registerAdapter(
+    [XAI_PROVIDER],
+    createXaiAdapter(service.xaiCredentials, () => ctx.get('attachments')),
+  )
+
+  let googleRegistration: ReturnType<typeof ctx.llm.registerAdapter> | undefined
+  const google = createGeminiService(ctx, {
+    createClient: createRoutedGeminiOAuthClient,
+    onAuthStateChange: authenticated => {
+      if (googleRegistration === undefined) {
+        if (authenticated) {
+          googleRegistration = ctx.llm.registerAdapter(
+            [GOOGLE_OAUTH_PROVIDER],
+            new GeminiCliAdapter(google) as unknown as LlmAdapter,
+          )
+        }
+        return
+      }
+      googleRegistration.replace(authenticated ? [GOOGLE_OAUTH_PROVIDER] : [])
+    },
+  })
+  service.attachGoogle(google)
+  void google.initialize().catch(error => {
+    ctx.logger.warn(`Google OAuth startup failed (${error instanceof Error ? error.message : String(error)})`)
+  })
+  ctx.effect(() => async () => { await google.dispose() }, 'dsh-providers: Google OAuth service')
   ctx.web.registerSearchProvider(new OpenAICodexSearchProvider({
     credentials,
     model: config.searchModel ?? DEFAULT_OPENAI_CODEX_SEARCH_MODEL,

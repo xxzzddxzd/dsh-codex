@@ -6,13 +6,15 @@ import { access } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-codex'
+import { xaiProvider } from '@earendil-works/pi-ai/providers/xai'
 import { resolveRetryPolicy } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
 import type { ResolvedPiAiProviderProfile } from '@deepseek-ai/dsh-llm-pi-ai'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { OpenAICodexCredentialStore } from './store.ts'
-import { OPENAI_CODEX_PROVIDER } from './store.ts'
+import type { XaiCredentialStore } from './store.ts'
+import { OPENAI_CODEX_PROVIDER, XAI_PROVIDER } from './store.ts'
 import { OpenAICodexResponseRuntime } from './responses.ts'
 import type { ResponseApiPreferences } from './tool-policy.ts'
 
@@ -134,4 +136,31 @@ export function createOpenAICodexAdapter(
     auth: { credentials, authContext },
     resolveAttachments,
   }, responses)
+}
+
+/** Create the pi-ai xAI adapter using its native SuperGrok/X OAuth tokens. */
+export function createXaiAdapter(
+  credentials: XaiCredentialStore,
+  resolveAttachments: () => AttachmentStore | undefined,
+): PiAiAdapter {
+  const provider = xaiProvider()
+  const profiles = new Map<string, ResolvedPiAiProviderProfile>([[XAI_PROVIDER, {
+    provider: XAI_PROVIDER,
+    displayName: 'xAI',
+    streamIdleTimeoutMs: OPENAI_CODEX_STREAM_IDLE_TIMEOUT_MS,
+    maxRequestImageBytes: DEFAULT_MAX_REQUEST_IMAGE_BYTES,
+    requestImagePixelBudget: DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET,
+    requestImageMaxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
+    retryPolicy: resolveRetryPolicy(undefined, 'dsh-xai retryPolicy'),
+    configuredMaxTokens: new Map(),
+    piProvider: requestProvider(provider),
+  }]])
+  const models: MutableModels = createModels({ credentials })
+  models.setProvider(provider)
+  return new PiAiAdapter({
+    profiles: () => profiles,
+    resolveApiKey: async () => (await models.getAuth(XAI_PROVIDER))?.auth.apiKey,
+    auth: { credentials, authContext },
+    resolveAttachments,
+  })
 }

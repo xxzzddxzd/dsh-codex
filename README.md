@@ -2,11 +2,13 @@
 
 English | [中文](README.zh.md)
 
-Use a ChatGPT subscription in [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) through OpenAI's Codex sign-in flow—no OpenAI Platform API key required and no dsh source patch required.
+Connect subscription providers to [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) without patching DSH. The bundle includes pi-ai's OpenAI Codex and xAI providers plus the Google Code Assist OAuth implementation from `@kelvinwww/dsh-oauth`.
 
 `dsh-codex` is an independent dsh bundle. It adds:
 
 - ChatGPT OAuth from the dsh Settings panel or a standalone CLI, with automatic token refresh
+- SuperGrok/X Premium OAuth and the pi-ai xAI model catalog
+- Google OAuth and Gemini Code Assist through `@kelvinwww/dsh-oauth`
 - the Codex GPT catalog, including vision-capable models when the account offers them
 - streaming, tool calls, reasoning replay, prompt caching, and dsh compaction through the normal LLM service
 - Codex standalone web search through dsh's existing `web_search` tool
@@ -27,7 +29,7 @@ dsh web
 
 From a DeepSeek Harness source checkout, use `pnpm dsh plugin --profile web add dsh-codex`. A local plugin checkout can still be installed with `link:/absolute/path/to/dsh-codex` for development.
 
-Open **Settings → OpenAI Codex → Sign in with ChatGPT**. The plugin opens OpenAI's authorization page and completes the localhost callback. The account page shows live Codex quota bars and exact remaining percentages; exact credit balances or workspace limits appear only when the account API supplies them.
+Open **Settings → Provider**, select OpenAI Codex, xAI, or Google OAuth, then sign in on that provider's subpage. The OpenAI page also shows live Codex quota bars. Google requires `GEMINI_CLIENT_ID` and `GEMINI_CLIENT_SECRET`; paid Code Assist tiers also require `GOOGLE_CLOUD_PROJECT` or `GOOGLE_CLOUD_PROJECT_ID`. Google uses a dynamic loopback callback port, so complete authorization in iPhone Safari for an iPhone deployment. Starting it from the Mac-side USB `3081` page redirects back to the Mac rather than the phone.
 
 The CLI remains available for terminal and headless installations:
 
@@ -50,11 +52,13 @@ Codex, Claude Code, and other automation agents should follow [INSTALL.md](INSTA
 
 The bundle selects `openai-codex` / `gpt-5.6-sol` for new agents and selects the Codex search provider. A model already saved in dsh settings still takes precedence; the model picker can select any other Codex model visible to the signed-in account.
 
-## iPhone VLESS routing
+## Provider VLESS routing
 
-On the iPhone build with `com.xxzzddxzd.dsh-vless` installed, **Settings → OpenAI Codex** accepts a VLESS Reality link and exposes a separate routing switch. Saving validates the generated Xray config, restarts the loopback-only client, and tests an OpenAI HTTPS tunnel before replacing the previous node. The credential-bearing config stays at `/var/root/.config/dsh-vless/config.json` with mode `0600`; the browser receives only a redacted node label and health state.
+On the iPhone build with `com.xxzzddxzd.dsh-vless` installed, configure and test the private VLESS Reality node under **Settings → VLESS**. Then open **Settings → Provider**, enter any provider subpage, and choose either **Direct connection** or the configured VLESS node. Each provider keeps an independent selection; replacing a node does not change those selections.
 
-The switch affects OpenAI-owned and ChatGPT-owned hostnames only. When enabled, those requests fail closed if the local client is unavailable; DeepSeek, other providers, arbitrary `read_image` URLs, and Bash/Python subprocess traffic keep the original direct dispatcher. Turning the switch off makes Codex direct again without requiring Shadowrocket or taking over system traffic.
+Saving validates the generated Xray config, restarts the loopback-only client, and tests an HTTPS tunnel before replacing the previous node. The credential-bearing config stays at `/var/root/.config/dsh-vless/config.json` with mode `0600`; the browser receives only a redacted node label and health state.
+
+Routing is hostname-scoped: OpenAI/ChatGPT, xAI, and Google service domains follow only their own provider switch. DeepSeek, arbitrary `read_image` URLs, and Bash/Python subprocess traffic remain direct. Google OAuth exchange, token refresh, model discovery, and generation share the same selection as Google model traffic.
 
 ## Images
 

@@ -184,7 +184,7 @@ export class VlessController {
       try {
         await this.restart()
         await this.waitForProxy()
-        await this.probeOpenAI()
+        await this.probeExit()
       } catch {
         await atomicPrivateWrite(
           this.options.configPath,
@@ -201,14 +201,14 @@ export class VlessController {
     }
   }
 
-  /** Require a configured client and prove an OpenAI HTTPS tunnel before enabling. */
+  /** Require a configured client and prove a generic HTTPS tunnel before enabling. */
   async ensureReady(): Promise<void> {
     if (!await this.isConfigured()) throw new Error('Save and test a VLESS node before enabling it')
     if (!await tcpReachable(this.options.proxyPort)) {
       await this.restart()
       await this.waitForProxy()
     }
-    await this.probeOpenAI()
+    await this.probeExit()
   }
 
   private async isConfigured(): Promise<boolean> {
@@ -257,15 +257,15 @@ export class VlessController {
     throw new Error('The local VLESS client did not start')
   }
 
-  private async probeOpenAI(): Promise<number> {
+  private async probeExit(): Promise<number> {
     const proxy = new ProxyAgent(this.options.proxyUrl)
     const startedAt = performance.now()
     try {
-      const response = await request('https://api.openai.com/v1/models', {
+      const response = await request('https://www.gstatic.com/generate_204', {
         method: 'GET',
         dispatcher: proxy,
         signal: AbortSignal.timeout(15_000),
-        headers: { 'user-agent': 'dsh-codex-vless-check' },
+        headers: { 'user-agent': 'dsh-provider-vless-check' },
       })
       await response.body.dump()
       return Math.max(1, Math.round(performance.now() - startedAt))

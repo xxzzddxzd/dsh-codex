@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { Dispatcher } from 'undici'
 import type { Dispatcher as DispatcherType } from 'undici'
-import { createOpenAICodexDispatcher, isOpenAIProxyHost, measureWarmLatency } from '../src/proxy.ts'
+import {
+  createOpenAICodexDispatcher,
+  createProviderDispatcher,
+  isOpenAIProxyHost,
+  isProviderProxyHost,
+  measureWarmLatency,
+} from '../src/proxy.ts'
+import { GOOGLE_OAUTH_PROVIDER, OPENAI_CODEX_PROVIDER, XAI_PROVIDER } from '../src/provider-ids.ts'
 
 class RecordingDispatcher extends Dispatcher {
   readonly origins: string[] = []
@@ -33,6 +40,14 @@ describe('OpenAI-selective proxy dispatcher', () => {
     expect(isOpenAIProxyHost('notopenai.com')).toBe(false)
   })
 
+  it('recognizes xAI and Google service domains without cross-provider suffix matches', () => {
+    expect(isProviderProxyHost(XAI_PROVIDER, 'api.x.ai')).toBe(true)
+    expect(isProviderProxyHost(XAI_PROVIDER, 'x.ai.evil.example')).toBe(false)
+    expect(isProviderProxyHost(GOOGLE_OAUTH_PROVIDER, 'oauth2.googleapis.com')).toBe(true)
+    expect(isProviderProxyHost(GOOGLE_OAUTH_PROVIDER, 'cloudcode-pa.googleapis.com')).toBe(true)
+    expect(isProviderProxyHost(GOOGLE_OAUTH_PROVIDER, 'googleapis.com.evil.example')).toBe(false)
+  })
+
   it('routes dynamically while leaving DeepSeek and arbitrary URLs direct', () => {
     const direct = new RecordingDispatcher()
     const proxied = new RecordingDispatcher()
@@ -48,5 +63,32 @@ describe('OpenAI-selective proxy dispatcher', () => {
 
     expect(proxied.origins).toEqual(['https://auth.openai.com', 'https://chatgpt.com'])
     expect(direct.origins).toEqual(['https://api.openai.com', 'https://api.deepseek.com', 'https://example.net'])
+  })
+
+  it('selects VLESS independently for all three managed providers', () => {
+    const direct = new RecordingDispatcher()
+    const proxied = new RecordingDispatcher()
+    const enabled = new Set([XAI_PROVIDER, GOOGLE_OAUTH_PROVIDER])
+    const router = createProviderDispatcher(direct, proxied, provider => enabled.has(provider))
+
+    send(router, 'https://api.openai.com')
+    send(router, 'https://api.x.ai')
+    send(router, 'https://oauth2.googleapis.com')
+    enabled.delete(XAI_PROVIDER)
+    enabled.add(OPENAI_CODEX_PROVIDER)
+    send(router, 'https://auth.x.ai')
+    send(router, 'https://chatgpt.com')
+    send(router, 'https://api.deepseek.com')
+
+    expect(proxied.origins).toEqual([
+      'https://api.x.ai',
+      'https://oauth2.googleapis.com',
+      'https://chatgpt.com',
+    ])
+    expect(direct.origins).toEqual([
+      'https://api.openai.com',
+      'https://auth.x.ai',
+      'https://api.deepseek.com',
+    ])
   })
 })

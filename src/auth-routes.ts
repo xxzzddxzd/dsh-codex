@@ -4,12 +4,22 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AuthEvent, AuthPrompt } from '@earendil-works/pi-ai'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
-import { loginOpenAICodex, logoutOpenAICodex, openAICodexAuthStatus } from './auth.ts'
+import {
+  loginOpenAICodex,
+  loginXai,
+  logoutOpenAICodex,
+  logoutXai,
+  openAICodexAuthStatus,
+  xaiAuthStatus,
+} from './auth.ts'
 import type { OpenAICodexCredentialStore } from './store.ts'
+import type { XaiCredentialStore } from './store.ts'
 import type { ImageToolPolicy, ImageToolPreferences, ResponseApiPreferences } from './tool-policy.ts'
 import { readOpenAICodexRateLimits } from './usage.ts'
 import type { OpenAICodexUsage } from './usage.ts'
 import type { OpenAICodexService } from './service.ts'
+import { MANAGED_PROVIDERS } from './provider-ids.ts'
+import type { ManagedProvider } from './provider-ids.ts'
 
 /** Plugin-owned status endpoint consumed by its browser half. */
 export const OPENAI_CODEX_AUTH_STATUS_PATH = '/plugins/dsh-openai-codex/auth/status'
@@ -23,6 +33,19 @@ export const OPENAI_CODEX_IMAGE_TOOL_SETTINGS_PATH = '/plugins/dsh-openai-codex/
 export const OPENAI_CODEX_RESPONSE_API_SETTINGS_PATH = '/plugins/dsh-openai-codex/response-api'
 /** Plugin-owned proxy endpoint consumed by its browser half. */
 export const OPENAI_CODEX_PROXY_SETTINGS_PATH = '/plugins/dsh-openai-codex/proxy'
+/** pi-ai xAI OAuth endpoints consumed by its Provider subpage. */
+export const XAI_AUTH_STATUS_PATH = '/plugins/dsh-openai-codex/providers/xai/auth/status'
+export const XAI_AUTH_LOGIN_PATH = '/plugins/dsh-openai-codex/providers/xai/auth/login'
+export const XAI_AUTH_LOGOUT_PATH = '/plugins/dsh-openai-codex/providers/xai/auth/logout'
+/** @kelvinwww/dsh-oauth Google endpoints consumed by its Provider subpage. */
+export const GOOGLE_AUTH_STATUS_PATH = '/plugins/dsh-openai-codex/providers/google/auth/status'
+export const GOOGLE_AUTH_LOGIN_PATH = '/plugins/dsh-openai-codex/providers/google/auth/login'
+export const GOOGLE_AUTH_LOGOUT_PATH = '/plugins/dsh-openai-codex/providers/google/auth/logout'
+
+/** Same-origin exit endpoint for one exact provider route. */
+export function providerEgressPath(provider: ManagedProvider): string {
+  return `/plugins/dsh-openai-codex/providers/${encodeURIComponent(provider)}/egress`
+}
 
 export type OpenAICodexWebAuthStatus =
   | { status: 'signed-out' }
@@ -32,6 +55,7 @@ export type OpenAICodexWebAuthStatus =
 
 interface LoginChallenge {
   url: string
+  userCode?: string
 }
 
 /** Redact provider diagnostics before they cross to the browser. */
@@ -147,6 +171,88 @@ export class OpenAICodexWebAuth {
   }
 }
 
+/** Browser-facing lifecycle for pi-ai's xAI device-code OAuth flow. */
+export class XaiWebAuth {
+  private state: 'signed-out' | 'signing-in' | 'signed-in' | 'error' = 'signed-out'
+  private message: string | undefined
+  private operation: Promise<void> | undefined
+  private cancellation: AbortController | undefined
+  private challenge: LoginChallenge | undefined
+  private challengeWaiters: Array<{ resolve(value: LoginChallenge): void; reject(error: unknown): void }> = []
+
+  constructor(private readonly store: XaiCredentialStore) {}
+
+  async status(): Promise<{ status: 'signed-out' | 'signing-in' | 'signed-in' | 'error'; message?: string }> {
+    if (this.operation !== undefined) return { status: this.state, ...(this.message === undefined ? {} : { message: this.message }) }
+    if (this.state === 'error') return { status: 'error', ...(this.message === undefined ? {} : { message: this.message }) }
+    return { status: (await xaiAuthStatus(this.store)).authenticated ? 'signed-in' : 'signed-out' }
+  }
+
+  async signIn(): Promise<LoginChallenge> {
+    if (this.operation === undefined) this.start()
+    if (this.challenge !== undefined) return this.challenge
+    return new Promise<LoginChallenge>((resolve, reject) => { this.challengeWaiters.push({ resolve, reject }) })
+  }
+
+  async signOut(): Promise<void> {
+    this.cancellation?.abort(new Error('xAI sign-in cancelled'))
+    await this.operation?.catch(() => undefined)
+    await logoutXai(this.store)
+    this.state = 'signed-out'
+    this.message = undefined
+  }
+
+  async dispose(): Promise<void> {
+    this.cancellation?.abort(new Error('xAI provider disposed'))
+    await this.operation?.catch(() => undefined)
+  }
+
+  private start(): void {
+    const cancellation = new AbortController()
+    this.cancellation = cancellation
+    this.challenge = undefined
+    this.message = undefined
+    this.state = 'signing-in'
+    this.operation = loginXai({
+      signal: cancellation.signal,
+      prompt: waitForPromptAbort,
+      notify: event => { this.onEvent(event) },
+    }, this.store).then(
+      () => { this.state = 'signed-in' },
+      (error: unknown) => {
+        this.rejectChallenge(error)
+        this.message = safeMessage(error)
+        this.state = 'error'
+      },
+    ).finally(() => {
+      this.operation = undefined
+      this.cancellation = undefined
+    })
+  }
+
+  private onEvent(event: AuthEvent): void {
+    const detail = event.type === 'auth_url'
+      ? { url: event.url }
+      : event.type === 'device_code'
+        ? { url: event.verificationUri, userCode: event.userCode }
+        : undefined
+    if (detail === undefined) return
+    const url = new URL(detail.url)
+    if (url.protocol !== 'https:') {
+      const error = new Error('xAI returned an unsafe authorization URL')
+      this.cancellation?.abort(error)
+      this.rejectChallenge(error)
+      return
+    }
+    this.challenge = detail
+    for (const waiter of this.challengeWaiters.splice(0)) waiter.resolve(detail)
+  }
+
+  private rejectChallenge(error: unknown): void {
+    for (const waiter of this.challengeWaiters.splice(0)) waiter.reject(error)
+  }
+}
+
 /** Whether a request comes from this loopback page rather than a remote site. */
 function trustedRequest(req: IncomingMessage): boolean {
   const remote = req.socket.remoteAddress
@@ -227,6 +333,7 @@ export function registerOpenAICodexAuthRoutes(
   service: OpenAICodexService,
 ): void {
   const auth = new OpenAICodexWebAuth(store)
+  const xaiAuth = new XaiWebAuth(service.xaiCredentials)
   ctx.effect(() => {
     const routes = [
       ctx.webServer.register({
@@ -261,6 +368,97 @@ export function registerOpenAICodexAuthRoutes(
           json(res, 200, { ok: true })
         },
       }),
+      ctx.webServer.register({
+        kind: 'exact',
+        path: XAI_AUTH_STATUS_PATH,
+        handler: async (req, res) => {
+          if (req.method !== 'GET') return json(res, 405, { error: 'method not allowed' })
+          if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
+          json(res, 200, await xaiAuth.status())
+        },
+      }),
+      ctx.webServer.register({
+        kind: 'exact',
+        path: XAI_AUTH_LOGIN_PATH,
+        handler: async (req, res) => {
+          if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' })
+          if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
+          try {
+            json(res, 200, await xaiAuth.signIn())
+          } catch (error: unknown) {
+            json(res, 500, { error: safeMessage(error) })
+          }
+        },
+      }),
+      ctx.webServer.register({
+        kind: 'exact',
+        path: XAI_AUTH_LOGOUT_PATH,
+        handler: async (req, res) => {
+          if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' })
+          if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
+          await xaiAuth.signOut()
+          json(res, 200, { ok: true })
+        },
+      }),
+      ctx.webServer.register({
+        kind: 'exact',
+        path: GOOGLE_AUTH_STATUS_PATH,
+        handler: async (req, res) => {
+          if (req.method !== 'GET') return json(res, 405, { error: 'method not allowed' })
+          if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
+          try {
+            const status = await service.googleAuthStatus()
+            json(res, 200, { status: status.authenticated ? 'signed-in' : 'signed-out' })
+          } catch (error: unknown) {
+            json(res, 500, { error: safeMessage(error) })
+          }
+        },
+      }),
+      ctx.webServer.register({
+        kind: 'exact',
+        path: GOOGLE_AUTH_LOGIN_PATH,
+        handler: async (req, res) => {
+          if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' })
+          if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
+          try {
+            json(res, 200, await service.startGoogleLogin())
+          } catch (error: unknown) {
+            json(res, 500, { error: safeMessage(error) })
+          }
+        },
+      }),
+      ctx.webServer.register({
+        kind: 'exact',
+        path: GOOGLE_AUTH_LOGOUT_PATH,
+        handler: async (req, res) => {
+          if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' })
+          if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
+          try {
+            await service.googleLogout()
+            json(res, 200, { ok: true })
+          } catch (error: unknown) {
+            json(res, 500, { error: safeMessage(error) })
+          }
+        },
+      }),
+      ...MANAGED_PROVIDERS.map(provider => ctx.webServer.register({
+        kind: 'exact' as const,
+        path: providerEgressPath(provider),
+        handler: async (req, res) => {
+          if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
+          if (req.method === 'GET') return json(res, 200, await service.providerVlessStatus(provider))
+          if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' })
+          try {
+            const body = await readJson(req)
+            if (Object.keys(body).length !== 1 || (body.egress !== 'direct' && body.egress !== 'vless')) {
+              throw new Error('request must contain only egress set to direct or vless')
+            }
+            json(res, 200, await service.updateProviderEgress(provider, body.egress))
+          } catch (error: unknown) {
+            json(res, 400, { error: safeMessage(error) })
+          }
+        },
+      })),
       ctx.webServer.register({
         kind: 'exact',
         path: OPENAI_CODEX_IMAGE_TOOL_SETTINGS_PATH,
@@ -298,7 +496,7 @@ export function registerOpenAICodexAuthRoutes(
           if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' })
           try {
             const body = await readJson(req)
-            const allowed = new Set(['enabled', 'vlessUrl', 'speedTest'])
+            const allowed = new Set(['egress', 'enabled', 'vlessUrl', 'speedTest'])
             if (Object.keys(body).some(key => !allowed.has(key))) throw new Error('request contains an unknown VLESS setting')
             if (body.speedTest !== undefined) {
               if (body.speedTest !== true || Object.keys(body).length !== 1) {
@@ -313,11 +511,18 @@ export function registerOpenAICodexAuthRoutes(
               }
               await service.vless.configure(body.vlessUrl)
             }
+            if (body.egress !== undefined) {
+              if (body.egress !== 'direct' && body.egress !== 'vless') {
+                throw new Error('egress must be direct or vless')
+              }
+              if (body.enabled !== undefined) throw new Error('request cannot include both egress and enabled')
+              return json(res, 200, await service.updateEgress(body.egress))
+            }
             if (body.enabled !== undefined) {
               if (typeof body.enabled !== 'boolean') throw new Error('enabled must be a boolean')
               return json(res, 200, await service.updateVlessEnabled(body.enabled))
             }
-            if (body.vlessUrl === undefined) throw new Error('request must include enabled, vlessUrl, or speedTest')
+            if (body.vlessUrl === undefined) throw new Error('request must include egress, enabled, vlessUrl, or speedTest')
             json(res, 200, await service.vlessStatus())
           } catch (error: unknown) {
             json(res, 400, { error: safeMessage(error) })
@@ -328,6 +533,7 @@ export function registerOpenAICodexAuthRoutes(
     return async () => {
       for (const dispose of routes) dispose()
       await auth.dispose()
+      await xaiAuth.dispose()
     }
-  }, 'dsh-openai-codex: Web OAuth routes')
+  }, 'dsh-providers: Web OAuth and network routes')
 }
