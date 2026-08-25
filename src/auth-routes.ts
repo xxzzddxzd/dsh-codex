@@ -441,7 +441,10 @@ export function registerOpenAICodexAuthRoutes(
           if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
           try {
             const status = await service.googleAuthStatus()
-            json(res, 200, { status: status.authenticated ? 'signed-in' : 'signed-out' })
+            json(res, 200, {
+              status: status.authenticated ? 'signed-in' : 'signed-out',
+              configured: service.googleOAuthConfigured(),
+            })
           } catch (error: unknown) {
             json(res, 500, { error: safeMessage(error) })
           }

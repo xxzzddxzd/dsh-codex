@@ -13,12 +13,11 @@ import type { ProviderSettingsKey } from './provider-locales.ts'
 
 type ProviderPage = 'openai' | 'xai' | 'google'
 
-type AccountStatus =
-  | { status: 'loading' }
-  | { status: 'signed-out' }
-  | { status: 'signing-in' }
-  | { status: 'signed-in' }
-  | { status: 'error'; message?: string }
+interface AccountStatus {
+  status: 'loading' | 'signed-out' | 'signing-in' | 'signed-in' | 'error'
+  message?: string
+  configured?: boolean
+}
 
 interface LoginChallenge {
   url: string
@@ -173,17 +172,18 @@ function OAuthProviderPage({ kind, t, onBack }: {
   const root = `/plugins/dsh-openai-codex/providers/${kind}/auth`
   const [status, setStatus] = useState<AccountStatus>({ status: 'loading' })
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | undefined>()
+  const [statusError, setStatusError] = useState<string | undefined>()
+  const [actionError, setActionError] = useState<string | undefined>()
   const [userCode, setUserCode] = useState<string | undefined>()
 
   useEffect(() => {
     let active = true
     const refresh = async (): Promise<void> => {
       try {
-        const next = await jsonRequest<Exclude<AccountStatus, { status: 'loading' }>>(`${root}/status`)
-        if (active) { setStatus(next); setError(undefined) }
+        const next = await jsonRequest<AccountStatus>(`${root}/status`)
+        if (active) { setStatus(next); setStatusError(undefined) }
       } catch (cause: unknown) {
-        if (active) setError(cause instanceof Error ? cause.message : t('accountFailed'))
+        if (active) setStatusError(cause instanceof Error ? cause.message : t('accountFailed'))
       }
     }
     void refresh()
@@ -193,9 +193,9 @@ function OAuthProviderPage({ kind, t, onBack }: {
 
   const signIn = async (): Promise<void> => {
     const popup = window.open('about:blank', '_blank')
-    if (popup === null) { setError(t('popupBlocked')); return }
+    if (popup === null) { setActionError(t('popupBlocked')); return }
     setBusy(true)
-    setError(undefined)
+    setActionError(undefined)
     setUserCode(undefined)
     try {
       const challenge = await jsonRequest<LoginChallenge>(`${root}/login`, 'POST')
@@ -203,7 +203,7 @@ function OAuthProviderPage({ kind, t, onBack }: {
       popup.location.href = challenge.url
     } catch (cause: unknown) {
       popup.close()
-      setError(cause instanceof Error ? cause.message : t('accountFailed'))
+      setActionError(cause instanceof Error ? cause.message : t('accountFailed'))
     } finally {
       setBusy(false)
     }
@@ -211,13 +211,16 @@ function OAuthProviderPage({ kind, t, onBack }: {
 
   const signOut = async (): Promise<void> => {
     setBusy(true)
-    setError(undefined)
+    setActionError(undefined)
     try {
       await jsonRequest(`${root}/logout`, 'POST')
-      setStatus({ status: 'signed-out' })
+      setStatus({
+        status: 'signed-out',
+        ...status.configured === undefined ? {} : { configured: status.configured },
+      })
       setUserCode(undefined)
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : t('accountFailed'))
+      setActionError(cause instanceof Error ? cause.message : t('accountFailed'))
     } finally {
       setBusy(false)
     }
@@ -230,6 +233,7 @@ function OAuthProviderPage({ kind, t, onBack }: {
       : status.status === 'signing-in'
         ? t('signingIn')
         : t('signedOut')
+  const googleUnconfigured = !xai && status.configured === false
 
   return (
     <section style={pageStyle}>
@@ -242,11 +246,13 @@ function OAuthProviderPage({ kind, t, onBack }: {
           </div>
           {status.status === 'signed-in'
             ? <button type="button" style={buttonStyle} disabled={busy} onClick={() => { void signOut() }}>{busy ? t('working') : t('logout')}</button>
-            : <button type="button" style={primaryButtonStyle} disabled={busy || status.status === 'signing-in'} onClick={() => { void signIn() }}>{busy ? t('working') : status.status === 'error' ? t('loginAgain') : xai ? t('loginXai') : t('loginGoogle')}</button>}
+            : <button type="button" style={primaryButtonStyle} disabled={busy || status.status === 'signing-in' || googleUnconfigured} onClick={() => { void signIn() }}>{busy ? t('working') : status.status === 'error' ? t('loginAgain') : xai ? t('loginXai') : t('loginGoogle')}</button>}
         </div>
         {userCode === undefined ? null : <p style={bodyStyle}>{t('deviceCode', { code: userCode })}</p>}
+        {googleUnconfigured ? <p role="alert" style={errorStyle}>{t('googleNotConfigured')}</p> : null}
         {status.status === 'error' && status.message !== undefined ? <p style={errorStyle}>{status.message}</p> : null}
-        {error === undefined ? null : <p style={errorStyle}>{error}</p>}
+        {statusError === undefined ? null : <p role="alert" style={errorStyle}>{statusError}</p>}
+        {actionError === undefined ? null : <p role="alert" style={errorStyle}>{actionError}</p>}
       </div>
       {xai ? <XaiImageSettings t={t} /> : null}
       <ProviderEgressSettings provider={xai ? XAI_PROVIDER : GOOGLE_OAUTH_PROVIDER} t={t} />

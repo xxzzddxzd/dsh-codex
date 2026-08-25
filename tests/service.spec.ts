@@ -12,6 +12,17 @@ function service(): OpenAICodexService {
 }
 
 describe('OpenAICodexService network exit', () => {
+  it('reports whether the Google OAuth installed-app client is configured', () => {
+    vi.stubEnv('GEMINI_CLIENT_ID', '')
+    vi.stubEnv('GEMINI_CLIENT_SECRET', '')
+    expect(service().googleOAuthConfigured()).toBe(false)
+
+    vi.stubEnv('GEMINI_CLIENT_ID', 'client-id')
+    vi.stubEnv('GEMINI_CLIENT_SECRET', 'client-secret')
+    expect(service().googleOAuthConfigured()).toBe(true)
+    vi.unstubAllEnvs()
+  })
+
   it('projects the legacy durable switch as a provider-facing exit', async () => {
     const subject = service()
     vi.spyOn(subject.vless, 'status').mockResolvedValue({

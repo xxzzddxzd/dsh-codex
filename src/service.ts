@@ -126,6 +126,11 @@ export class OpenAICodexService {
     return this.google.startGeminiLogin().then(({ authUrl }) => ({ url: authUrl }))
   }
 
+  /** Whether Kelvin's Google OAuth flow has its required installed-app client. */
+  googleOAuthConfigured(): boolean {
+    return Boolean(process.env.GEMINI_CLIENT_ID?.trim() && process.env.GEMINI_CLIENT_SECRET?.trim())
+  }
+
   async googleAuthStatus(): Promise<{ authenticated: boolean }> {
     return { authenticated: await this.requireGoogle().isAuthenticated() }
   }
