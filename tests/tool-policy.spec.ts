@@ -42,10 +42,12 @@ describe('ImageToolPolicy', () => {
       useNativeCompaction: false,
     })
     expect(policy.vlessSnapshot()).toEqual({ useVless: false })
+    expect(policy.xaiImageSnapshot()).toEqual({ model: 'grok-imagine-image-2.0' })
 
     await policy.update({ shareImagegenWithOtherModels: false })
     await policy.updateResponseApi({ useNativeCompaction: true })
     await policy.updateVless(true)
+    await policy.updateXaiImageModel('grok-imagine-image-quality')
 
     expect(policy.snapshot()).toEqual({
       modifyReadImage: true,
@@ -56,6 +58,7 @@ describe('ImageToolPolicy', () => {
       useNativeCompaction: true,
     })
     expect(policy.vlessSnapshot()).toEqual({ useVless: true })
+    expect(policy.xaiImageSnapshot()).toEqual({ model: 'grok-imagine-image-quality' })
   })
 
   it('notifies the read_image enhancer when its live setting changes', async () => {
@@ -95,6 +98,7 @@ describe('ImageToolPolicy', () => {
     }) as never
 
     expect(() => policy.assertAllowed(execution('openai-codex'), 'imagegen')).not.toThrow()
+    expect(() => policy.assertAllowed(execution('xai'), 'imagegen')).not.toThrow()
     expect(() => policy.assertAllowed(execution('another-provider'), 'imagegen')).toThrow('disabled for models outside')
   })
 })

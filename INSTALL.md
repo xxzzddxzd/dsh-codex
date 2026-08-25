@@ -113,7 +113,7 @@ For the `web` profile, start `dsh web` if the user wants the application running
 - `GET /plugins/dsh-openai-codex/auth/status` returns JSON without credentials;
 - Settings contains a **Provider** section with OpenAI Codex, xAI, and Google OAuth subpages.
 
-Do not call the login endpoint as a health check because it starts OAuth. The Web composer already owns image paste and drop; do not patch dsh for Ctrl+V. The bundle can extend Harness's `read_image` with HTTP(S) URL input and adds `imagegen`; the current model route must explicitly advertise image input before either tool returns an image. `imagegen.output_path` is optional: without it, the plugin writes a uniquely named PNG in the active workspace. The generated attachment remains available when policy or filesystem capability refuses that write.
+Do not call the login endpoint as a health check because it starts OAuth. The Web composer already owns image paste and drop; do not patch dsh for Ctrl+V. The bundle can extend Harness's `read_image` with HTTP(S) URL input and adds provider-native `imagegen`; the current model route must explicitly advertise image input before either tool returns an image. Codex uses `gpt-image-2`; xAI uses the Imagine model selected on its Provider page. Without `output_path`, the plugin writes a unique filename with the detected image extension. The generated attachment remains available when policy or filesystem capability refuses that write.
 
 ### 7. Report completion
 

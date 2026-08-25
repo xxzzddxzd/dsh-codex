@@ -7,13 +7,13 @@ Connect subscription providers to [DeepSeek Harness](https://github.com/deepseek
 `dsh-codex` is an independent dsh bundle. It adds:
 
 - ChatGPT OAuth from the dsh Settings panel or a standalone CLI, with automatic token refresh
-- SuperGrok/X Premium OAuth and the pi-ai xAI model catalog
+- SuperGrok/X Premium OAuth and the pi-ai 0.84.3 xAI catalog, including Grok 4.6
 - Google OAuth and Gemini Code Assist through `@kelvinwww/dsh-oauth`
 - the Codex GPT catalog, including vision-capable models when the account offers them
 - streaming, tool calls, reasoning replay, prompt caching, and dsh compaction through the normal LLM service
 - Codex standalone web search through dsh's existing `web_search` tool
 - optional HTTP(S) URL input added to Harness's existing `read_image` tool
-- an `imagegen` tool backed by `gpt-image-2`, with workspace or conversation reference images and automatic workspace output
+- provider-native `imagegen`: `gpt-image-2` for Codex, or Grok Imagine 2.0 / Quality for xAI
 - browser image input through dsh's existing paste and drop controls
 
 ChatGPT subscription authentication and usage-based OpenAI API access are different products. This plugin uses the ChatGPT Codex backend only; it does not turn a subscription into a general-purpose OpenAI API credential.
@@ -70,7 +70,7 @@ Image support uses dsh's durable attachment path:
 - PNG, JPEG, WebP, and GIF are accepted within the active dsh attachment limits;
 - only a model that explicitly advertises image input may receive an image.
 
-`imagegen` is available to any vision-capable conversation model. The current model writes an ordinary prompt and may select either `referenced_image_paths` or `num_last_images_to_include`; the plugin reads the bytes from `ctx.fs` or the attachment store and sends them to `gpt-image-2`. The model never emits base64. Every result is shown inline, saved as a durable attachment, and written to the active workspace. `output_path` chooses the destination; omitting it creates a unique `generated-<timestamp>-<id>.png` file. Local saving is included in this plugin, while `dsh-remote-ssh` supplies the remote AHP write path when that plugin owns the workspace.
+`imagegen` is available to any vision-capable conversation model. Codex conversations use `gpt-image-2`; xAI conversations use the Grok Imagine model selected under **Settings → Provider → xAI**. The current pi-ai catalog exposes Imagine Image 2.0 and Imagine Image Quality. xAI edits accept up to three references; Codex accepts up to five. Every result is shown inline, saved as a durable attachment, and written to the active workspace with its detected PNG/JPEG/WebP/GIF extension.
 
 The Settings page has separate **Enhance read_image** and **Image generation for other models** toggles. Both default on. Turning off the first removes the plugin's agent-scoped override and restores Harness's original local-only `read_image` schema. Turning off the second keeps `imagegen` available to Codex vision models and rejects calls from other model providers at execution time.
 
@@ -124,6 +124,7 @@ Keeping the stores separate prevents two clients from racing the same rotating r
 - ChatGPT plan eligibility, model access, quotas, and backend behavior are controlled by OpenAI and may change.
 - The Codex endpoint does not enforce the ordinary Responses `max_output_tokens` field. Compaction works, but its configured summary cap cannot be imposed server-side on this route.
 - Filesystem, shell, skills, MCP, subagents, permissions, attachments, compaction, and the `web_search` tool itself still come from the active dsh profile.
+- The bundle pins pi-ai `0.84.3`; its xAI chat and image settings follow that exact catalog.
 - The standalone search endpoint is not a public OpenAI Platform API. Compatibility follows the pinned Codex/pi-ai implementation.
 
 See [the design document](docs/design.md) for protocol, persistence, and lifecycle details.

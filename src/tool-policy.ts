@@ -9,6 +9,11 @@ import {
   XAI_PROVIDER,
 } from './provider-ids.ts'
 import type { ManagedProvider } from './provider-ids.ts'
+import {
+  DEFAULT_XAI_IMAGE_MODEL,
+  isXaiImageModel,
+} from './xai-images.ts'
+import type { XaiImageModel } from './xai-images.ts'
 
 /** User-controlled image-tool integration. */
 export interface ImageToolPreferences {
@@ -34,6 +39,8 @@ interface OpenAICodexPreferences extends ImageToolPreferences, ResponseApiPrefer
   useXaiVless: boolean
   /** Whether Google Code Assist requests use the shared device-local VLESS client. */
   useGoogleVless: boolean
+  /** xAI image model used when imagegen is called from an xAI conversation. */
+  xaiImageModel: XaiImageModel
 }
 
 /** Defaults keep generic vision-model interoperability enabled. */
@@ -63,6 +70,8 @@ const schema: z<OpenAICodexPreferences> = z.object({
   useVless: z.boolean().default(false),
   useXaiVless: z.boolean().default(false),
   useGoogleVless: z.boolean().default(false),
+  xaiImageModel: z.union(['grok-imagine-image-2.0', 'grok-imagine-image-quality'] as const)
+    .default(DEFAULT_XAI_IMAGE_MODEL),
 })
 
 /** Live policy shared by the host tools, Codex adapter, and settings HTTP surface. */
@@ -79,6 +88,7 @@ export class ImageToolPolicy {
       useStatefulResponses: false,
       useXaiVless: false,
       useGoogleVless: false,
+      xaiImageModel: DEFAULT_XAI_IMAGE_MODEL,
       ...base,
     }
     if (this.current.useStatefulResponses && base.useWebSocketContextReuse === undefined) {
@@ -147,6 +157,20 @@ export class ImageToolPolicy {
     return this.providerVlessSnapshot(provider)
   }
 
+  /** Return the xAI image model selected for provider-native imagegen. */
+  xaiImageSnapshot(): { model: XaiImageModel } {
+    return { model: this.current.xaiImageModel }
+  }
+
+  /** Persist the xAI image model after exact catalog validation. */
+  async updateXaiImageModel(model: unknown): Promise<{ model: XaiImageModel }> {
+    if (!isXaiImageModel(model)) throw new Error('unsupported xAI image model')
+    if (this.scope === undefined) throw new Error('Provider settings service is unavailable')
+    await this.scope.update({ xaiImageModel: model })
+    this.replace(this.scope.get())
+    return this.xaiImageSnapshot()
+  }
+
   /** Persist a partial browser update through the settings service. */
   async update(patch: Partial<ImageToolPreferences>): Promise<ImageToolPreferences> {
     if (this.scope === undefined) throw new Error('OpenAI Codex settings service is unavailable')
@@ -178,9 +202,9 @@ export class ImageToolPolicy {
   assertAllowed(exec: ToolExecution, tool: 'imagegen'): void {
     const configured = exec.agent?.session.requestHeader()?.config
     const provider = configured?.provider ?? exec.agent?.options.provider
-    if (provider === OPENAI_CODEX_PROVIDER) return
+    if (provider === OPENAI_CODEX_PROVIDER || provider === XAI_PROVIDER) return
     if (!this.current.shareImagegenWithOtherModels) {
-      throw new Error(`${tool} is disabled for models outside the openai-codex provider in Settings`)
+      throw new Error(`${tool} is disabled for models outside the openai-codex and xai providers in Settings`)
     }
   }
 

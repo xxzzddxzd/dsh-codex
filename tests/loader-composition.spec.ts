@@ -64,7 +64,7 @@ describe('OpenAI Codex real composition', () => {
     const models = await ctx.llm.listModels('openai-codex')
     expect(models.some(model => model.id === 'gpt-5.6-sol')).toBe(true)
     const xaiModels = await ctx.llm.listModels('xai')
-    expect(xaiModels.some(model => model.id.toLowerCase().includes('grok'))).toBe(true)
+    expect(xaiModels.map(model => model.id)).toContain('grok-4.6')
 
     const entry = [...ctx.loader.entries()].find(candidate => candidate.options.name === 'dsh-codex')
     if (entry === undefined) throw new Error('OpenAI Codex Loader entry missing')

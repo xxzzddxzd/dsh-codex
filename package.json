@@ -1,7 +1,7 @@
 {
   "name": "dsh-codex",
   "description": "OpenAI Codex, xAI, and Google OAuth providers with per-provider VLESS routing for DeepSeek Harness",
-  "version": "0.2.5-iphone.7",
+  "version": "0.2.5-iphone.8",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
@@ -67,10 +67,10 @@
     }
   },
   "dependencies": {
+    "@earendil-works/pi-ai": "0.84.3",
     "undici": "8.10.0"
   },
   "peerDependencies": {
-    "@earendil-works/pi-ai": "^0.82.1",
     "@deepseek-ai/cordis": "^4.0.1-rc.1",
     "@deepseek-ai/dsh-agent": "0.1.1-rc.2",
     "@deepseek-ai/dsh-atomic-write": "0.1.1-rc.2",
@@ -92,7 +92,6 @@
   },
   "devDependencies": {
     "@kelvinwww/dsh-oauth": "0.1.1",
-    "@earendil-works/pi-ai": "0.82.1",
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/cordis-plugin-include": "1.0.6",
     "@deepseek-ai/cordis-plugin-loader": "1.0.2",

@@ -7,13 +7,13 @@
 `dsh-codex` 是一个独立的 dsh bundle，提供：
 
 - 在 dsh 设置面板或独立 CLI 中完成 ChatGPT OAuth 登录，并自动刷新 token
-- 通过 pi-ai 原生 OAuth 使用 SuperGrok/X Premium 与 xAI 模型目录
+- 通过 pi-ai 0.84.3 原生 OAuth 使用 SuperGrok/X Premium 与 xAI 模型目录（含 Grok 4.6）
 - 通过 `@kelvinwww/dsh-oauth` 使用 Google OAuth 与 Gemini Code Assist
 - Codex GPT 模型目录；账号提供视觉模型时自动声明其图片输入能力
 - 经标准 LLM 服务运行的流式响应、工具调用、推理回放、提示词缓存与 dsh 压缩
 - 通过 dsh 现有 `web_search` 工具使用 Codex 独立联网搜索
 - 为 Harness 现有 `read_image` 工具增加可选的 HTTP(S) URL 输入
-- 由 `gpt-image-2` 执行的 `imagegen` 工具，支持工作区／会话参考图和自动工作区输出
+- Provider 原生 `imagegen`：Codex 使用 `gpt-image-2`，xAI 使用 Grok Imagine 2.0 / Quality
 - 复用 dsh Web 输入框的粘贴和拖放图片能力
 
 ChatGPT 订阅认证与按量计费的 OpenAI API 是不同产品。本插件只使用 ChatGPT Codex 后端，不会把订阅转换成通用 OpenAI API 凭据。
@@ -68,7 +68,7 @@ bundle 会为新建 agent 选择 `openai-codex` / `gpt-5.6-sol`，并选择 Code
 - 在当前 dsh 附件限制内支持 PNG、JPEG、WebP 与 GIF；
 - 只有明确声明支持图片输入的模型才能接收图片。
 
-任何支持视觉输入的当前对话模型都可以使用 `imagegen`。当前模型只需编写普通提示词，并在 `referenced_image_paths` 与 `num_last_images_to_include` 中选择一种参考图来源；插件从 `ctx.fs` 或附件存储读取字节，再发送给 `gpt-image-2`。模型不会输出 base64。每个结果都会直接显示在对话中、保存为持久附件，并写入当前工作区。`output_path` 用来指定位置；省略时会创建唯一的 `generated-<时间戳>-<id>.png` 文件。本地保存能力包含在本插件中；当工作区由 `dsh-remote-ssh` 管理时，远程插件负责 AHP 写入路径。
+任何支持视觉输入的当前对话模型都可以使用 `imagegen`。Codex 会话使用 `gpt-image-2`；xAI 会话使用 **设置 → Provider → xAI** 中选择的 Grok Imagine 模型。当前 pi-ai 目录提供 Imagine Image 2.0 与 Imagine Image Quality。xAI 编辑最多支持三张参考图，Codex 最多五张。每个结果都会直接显示、保存为持久附件，并按检测到的 PNG／JPEG／WebP／GIF 扩展名写入当前工作区。
 
 设置页提供独立的 **增强 read_image** 与 **允许其他模型使用生图** 开关，默认均为开启。关闭第一项会撤销插件的 agent-scope 覆盖，恢复 Harness 原本只接受本地路径的 `read_image` Schema。关闭第二项后，Codex 视觉模型仍可使用 `imagegen`，其他模型提供方的调用会在执行入口被拒绝。
 
@@ -122,6 +122,7 @@ dsh 登录与 Codex CLI／Desktop 相互独立：
 - ChatGPT 套餐资格、模型权限、配额及后端行为由 OpenAI 控制，可能发生变化。
 - Codex 端点不执行普通 Responses 的 `max_output_tokens` 字段。压缩可以工作，但该路由无法在服务端落实配置的摘要上限。
 - 文件系统、shell、skills、MCP、subagents、权限、附件、压缩和 `web_search` 工具本身仍来自当前 dsh profile。
+- bundle 锁定 pi-ai `0.84.3`，xAI 对话与图片设置严格采用该版本目录。
 - 独立搜索端点不是公开的 OpenAI Platform API；兼容性取决于固定版本的 Codex／pi-ai 实现。
 
 协议、持久化与生命周期细节见[设计文档](docs/design.zh.md)。

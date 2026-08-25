@@ -8,17 +8,20 @@ import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-code
 import type { Context } from '@deepseek-ai/cordis'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
-import type { OpenAICodexCredentialStore } from './store.ts'
-import { OPENAI_CODEX_PROVIDER } from './store.ts'
+import type { OpenAICodexCredentialStore, XaiCredentialStore } from './store.ts'
+import { OPENAI_CODEX_PROVIDER, XAI_PROVIDER } from './store.ts'
 import { OPENAI_CODEX_BASE_URL } from './search.ts'
 import { writeWorkspaceBytes } from './binary-fs.ts'
 import { assertImageCapable } from './image-capability.ts'
 import { imageMediaType } from './read-image-enhancement.ts'
 import type { ImageToolPolicy } from './tool-policy.ts'
+import type { XaiImageModel } from './xai-images.ts'
+import { xaiProvider } from '@earendil-works/pi-ai/providers/xai'
 
 /** Stable Codex-compatible tool name. */
 export const IMAGEGEN_TOOL_NAME = 'imagegen'
@@ -28,12 +31,16 @@ export const OPENAI_CODEX_IMAGE_MODEL = 'gpt-image-2'
 export const OPENAI_CODEX_IMAGE_GENERATIONS_URL = `${OPENAI_CODEX_BASE_URL}/images/generations`
 /** Reference-image edit endpoint used by the official Codex client. */
 export const OPENAI_CODEX_IMAGE_EDITS_URL = `${OPENAI_CODEX_BASE_URL}/images/edits`
+/** xAI's provider-native image endpoints, authenticated by the same xAI OAuth account. */
+export const XAI_IMAGE_GENERATIONS_URL = 'https://api.x.ai/v1/images/generations'
+export const XAI_IMAGE_EDITS_URL = 'https://api.x.ai/v1/images/edits'
 
 const MAX_REFERENCE_IMAGES = 5
+const MAX_XAI_REFERENCE_IMAGES = 3
 
-function defaultOutputPath(now = new Date(), id = randomUUID()): string {
+function defaultOutputPath(extension: 'png' | 'jpg' | 'webp' | 'gif', now = new Date(), id = randomUUID()): string {
   const timestamp = now.toISOString().replace(/\.\d{3}Z$/u, 'Z').replaceAll(':', '-')
-  return `generated-${timestamp}-${id.slice(0, 8)}.png`
+  return `generated-${timestamp}-${id.slice(0, 8)}.${extension}`
 }
 
 interface ImagegenArgs {
@@ -47,7 +54,7 @@ interface ImagegenValue {
   prompt: string
   image: {
     attachmentId: string
-    mediaType: 'image/png'
+    mediaType: ImageMediaType
     bytes: number
     width: number
     height: number
@@ -88,6 +95,21 @@ function providerMessage(value: unknown): string | undefined {
       ? error['message']
       : typeof value['message'] === 'string' ? value['message'] : undefined
   return raw?.replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/gu, '[REDACTED]').slice(0, 1000)
+}
+
+function imageBytes(payload: unknown, provider: string): Uint8Array {
+  if (!isRecord(payload) || !Array.isArray(payload['data'])) {
+    throw new Error(`${provider} returned an image response without data`)
+  }
+  const first = payload['data'][0]
+  if (!isRecord(first) || typeof first['b64_json'] !== 'string' || first['b64_json'].length === 0) {
+    throw new Error(`${provider} returned an image response without base64 image data`)
+  }
+  const encoded = first['b64_json'].trim()
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(encoded)) {
+    throw new Error(`${provider} returned malformed base64 image data`)
+  }
+  return Buffer.from(encoded, 'base64')
 }
 
 function throwIfAborted(signal: AbortSignal): void {
@@ -180,18 +202,86 @@ export class OpenAICodexImageClient {
         ? `${message}; run "dsh openai-codex login" again`
         : message)
     }
-    if (!isRecord(payload) || !Array.isArray(payload['data'])) {
-      throw new Error('OpenAI Codex returned an image response without data')
+    return imageBytes(payload, 'OpenAI Codex')
+  }
+}
+
+/** OAuth-backed xAI Imagine client using the image models pinned by pi-ai. */
+export class XaiImageClient {
+  private readonly models: Models
+
+  constructor(
+    credentials: XaiCredentialStore,
+    private readonly selectedModel: () => XaiImageModel,
+  ) {
+    const models = createModels({ credentials })
+    models.setProvider(xaiProvider())
+    this.models = models
+  }
+
+  async generate(prompt: string, images: readonly string[], signal: AbortSignal): Promise<Uint8Array> {
+    throwIfAborted(signal)
+    if (images.length > MAX_XAI_REFERENCE_IMAGES) {
+      throw new Error(`xAI image editing accepts at most ${MAX_XAI_REFERENCE_IMAGES} reference images`)
     }
-    const first = payload['data'][0]
-    if (!isRecord(first) || typeof first['b64_json'] !== 'string' || first['b64_json'].length === 0) {
-      throw new Error('OpenAI Codex returned an image response without base64 image data')
+    const auth = await abortable(this.models.getAuth(XAI_PROVIDER), signal)
+    const access = auth?.auth.apiKey
+    if (access === undefined || access.length === 0) {
+      throw new Error('xAI image generation is signed out; sign in under Settings → Provider → xAI')
     }
-    const encoded = first['b64_json'].trim()
-    if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(encoded)) {
-      throw new Error('OpenAI Codex returned malformed base64 image data')
+    const endpoint = images.length === 0 ? XAI_IMAGE_GENERATIONS_URL : XAI_IMAGE_EDITS_URL
+    const references = images.length === 0
+      ? {}
+      : images.length === 1
+        ? { image: { type: 'image_url', url: images[0] } }
+        : { images: images.map(url => ({ type: 'image_url', url })) }
+    let response: Response
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        redirect: 'error',
+        headers: {
+          authorization: `Bearer ${access}`,
+          'content-type': 'application/json',
+          accept: 'application/json',
+        },
+        body: JSON.stringify({
+          model: this.selectedModel(),
+          prompt,
+          ...references,
+          response_format: 'b64_json',
+        }),
+        signal,
+      })
+    } catch (error: unknown) {
+      throwIfAborted(signal)
+      throw new Error('xAI image request failed', { cause: error })
     }
-    return Buffer.from(encoded, 'base64')
+    let payload: unknown
+    try {
+      payload = await response.json()
+    } catch (error: unknown) {
+      throw new Error(`xAI returned an unprocessable image response (HTTP ${response.status})`, { cause: error })
+    }
+    if (!response.ok) {
+      const detail = providerMessage(payload)
+      const message = detail === undefined
+        ? `xAI image request failed (HTTP ${response.status})`
+        : `xAI image request failed (HTTP ${response.status}): ${detail}`
+      throw new Error(response.status === 401 || response.status === 403
+        ? `${message}; sign in again under Settings → Provider → xAI`
+        : message)
+    }
+    return imageBytes(payload, 'xAI')
+  }
+}
+
+function fileExtension(mediaType: ImageMediaType): 'png' | 'jpg' | 'webp' | 'gif' {
+  switch (mediaType) {
+    case 'image/png': return 'png'
+    case 'image/jpeg': return 'jpg'
+    case 'image/webp': return 'webp'
+    case 'image/gif': return 'gif'
   }
 }
 
@@ -294,17 +384,19 @@ function parseArgs(args: ImagegenArgs): Required<Pick<ImagegenArgs, 'prompt'>> &
 export function imagegenTool(
   ctx: Context,
   credentials: OpenAICodexCredentialStore,
+  xaiCredentials: XaiCredentialStore,
   policy: ImageToolPolicy,
 ): ToolDefinition {
-  const client = new OpenAICodexImageClient(credentials)
+  const openaiClient = new OpenAICodexImageClient(credentials)
+  const xaiClient = new XaiImageClient(xaiCredentials, () => policy.xaiImageSnapshot().model)
   return defineTool({
     name: IMAGEGEN_TOOL_NAME,
-    description: 'Generate or edit an image with gpt-image-2. Omit both reference fields for a new image. Use referenced_image_paths for workspace files, or num_last_images_to_include for attached, viewed, or previously generated conversation images. Never provide both. Multiple images keep chronological/path-array order; identify them as Image 1, Image 2, and so on in the prompt. The generated PNG is always saved in the active local or Remote SSH workspace; output_path chooses its location, otherwise a unique generated-<timestamp>-<id>.png name is used.',
+    description: 'Generate or edit an image with the active provider: gpt-image-2 for OpenAI Codex, or the selected Grok Imagine model for xAI. Omit both reference fields for a new image. Use referenced_image_paths for workspace files, or num_last_images_to_include for attached, viewed, or previously generated conversation images. Never provide both. Multiple images keep chronological/path-array order; identify them as Image 1, Image 2, and so on in the prompt. The generated image is always saved in the active local or Remote SSH workspace; output_path chooses its location, otherwise a unique generated-<timestamp>-<id> name is used.',
     parameters: {
       prompt: { type: 'string', required: true, description: 'Complete generation or edit instruction. For multiple references, name each input by its Image N order.' },
-      referenced_image_paths: { type: 'array', items: { type: 'string' }, description: 'Up to five local or active-workspace image paths, in Image 1..N order.' },
-      num_last_images_to_include: { type: 'integer', description: 'Use the most recent 1–5 conversation images, preserving chronological order.' },
-      output_path: { type: 'string', description: 'Optional active-workspace path for the generated PNG. Omit it to save under a unique generated-<timestamp>-<id>.png name. Existing files remain subject to filesystem write-intent policy.' },
+      referenced_image_paths: { type: 'array', items: { type: 'string' }, description: 'Local or active-workspace image paths in Image 1..N order; up to five for Codex or three for xAI.' },
+      num_last_images_to_include: { type: 'integer', description: 'Use recent conversation images in chronological order; 1–5 for Codex or 1–3 for xAI.' },
+      output_path: { type: 'string', description: 'Optional active-workspace path for the generated image. Omit it to use a unique generated-<timestamp>-<id> name with the detected image extension. Existing files remain subject to filesystem write-intent policy.' },
     },
     output: {
       schema: {
@@ -318,7 +410,7 @@ export function imagegenTool(
             additionalProperties: false,
             properties: {
               attachmentId: { type: 'string', required: true },
-              mediaType: { type: 'string', required: true, enum: ['image/png'] },
+              mediaType: { type: 'string', required: true, enum: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] },
               bytes: { type: 'integer', required: true },
               width: { type: 'integer', required: true },
               height: { type: 'integer', required: true },
@@ -343,15 +435,23 @@ export function imagegenTool(
       const args = parseArgs(rawArgs)
       policy.assertAllowed(exec, 'imagegen')
       await assertImageCapable(ctx, exec, 'generate an image')
+      const configured = exec.agent?.session.requestHeader()?.config
+      const provider = configured?.provider ?? exec.agent?.options.provider
+      const useXai = provider === XAI_PROVIDER
+      const referenceCount = args.referenced_image_paths?.length ?? args.num_last_images_to_include ?? 0
+      if (useXai && referenceCount > MAX_XAI_REFERENCE_IMAGES) {
+        throw new Error(`xAI image editing accepts at most ${MAX_XAI_REFERENCE_IMAGES} reference images`)
+      }
       const images = args.referenced_image_paths !== undefined
         ? await workspaceImages(ctx, exec, args.referenced_image_paths)
         : args.num_last_images_to_include !== undefined
           ? await conversationImages(ctx, exec, args.num_last_images_to_include)
           : []
-      const data = await client.generate(args.prompt, images, exec.signal)
+      const data = await (useXai ? xaiClient : openaiClient).generate(args.prompt, images, exec.signal)
       const mediaType = imageMediaType(data)
-      if (mediaType !== 'image/png') throw new Error('OpenAI Codex image response was not a PNG')
-      const ref = await ctx.attachments.saveImage({ data, mediaType, name: 'generated.png' })
+      if (mediaType === undefined) throw new Error(`${useXai ? 'xAI' : 'OpenAI Codex'} image response was not PNG, JPEG, WebP, or GIF`)
+      const extension = fileExtension(mediaType)
+      const ref = await ctx.attachments.saveImage({ data, mediaType, name: `generated.${extension}` })
       const value: ImagegenValue = {
         prompt: args.prompt,
         image: {
@@ -363,7 +463,7 @@ export function imagegenTool(
           ...ref.name === undefined ? {} : { name: ref.name },
         },
       }
-      const outputPath = args.output_path ?? defaultOutputPath()
+      const outputPath = args.output_path ?? defaultOutputPath(extension)
       try {
         const cwd = exec.agent?.session.header.cwd
         const target = await ctx.fs.resolve(outputPath, { ...cwd === undefined ? {} : { cwd }, signal: exec.signal })

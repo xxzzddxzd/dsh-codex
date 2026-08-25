@@ -68,6 +68,18 @@ function requestProvider(provider: Provider): Provider {
   }
 }
 
+/**
+ * DSH rc.2 embeds pi-ai 0.82.x while this bundle owns the current pi-ai
+ * catalog. Static providers have no refresh hook, so their runtime contract is
+ * unchanged; this keeps the version boundary explicit and local.
+ */
+function adapterProvider(provider: Provider): ResolvedPiAiProviderProfile['piProvider'] {
+  if (provider.refreshModels !== undefined) {
+    throw new Error(`dynamic pi-ai provider "${provider.id}" cannot be mounted through the DSH rc.2 adapter`)
+  }
+  return provider as unknown as ResolvedPiAiProviderProfile['piProvider']
+}
+
 /** Preserve Harness call purpose until the generic pi-ai adapter reaches the provider. */
 class OpenAICodexAdapter extends PiAiAdapter {
   constructor(
@@ -126,7 +138,7 @@ export function createOpenAICodexAdapter(
     requestImageMaxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
     retryPolicy: resolveRetryPolicy(undefined, 'dsh-openai-codex retryPolicy'),
     configuredMaxTokens: new Map(),
-    piProvider: responses.wrap(requestProvider(provider)),
+    piProvider: adapterProvider(responses.wrap(requestProvider(provider))),
   }]])
   const models: MutableModels = createModels({ credentials })
   models.setProvider(provider)
@@ -153,7 +165,7 @@ export function createXaiAdapter(
     requestImageMaxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
     retryPolicy: resolveRetryPolicy(undefined, 'dsh-xai retryPolicy'),
     configuredMaxTokens: new Map(),
-    piProvider: requestProvider(provider),
+    piProvider: adapterProvider(requestProvider(provider)),
   }]])
   const models: MutableModels = createModels({ credentials })
   models.setProvider(provider)

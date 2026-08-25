@@ -45,6 +45,7 @@ const accountCardStyle: CSSProperties = { display: 'flex', flexDirection: 'colum
 const accountRowStyle: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }
 const statusStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 9, fontSize: 15, fontWeight: 500, color: 'var(--dsw-alias-label-primary)' }
 const errorStyle: CSSProperties = { ...bodyStyle, color: 'var(--dsw-alias-state-error-primary)' }
+const selectStyle: CSSProperties = { boxSizing: 'border-box', minWidth: 250, minHeight: 36, padding: '6px 10px', border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 14 }
 
 function dotStyle(status: AccountStatus['status']): CSSProperties {
   const color = status === 'signed-in'
@@ -55,8 +56,16 @@ function dotStyle(status: AccountStatus['status']): CSSProperties {
   return { width: 8, height: 8, flex: '0 0 auto', borderRadius: 999, background: color }
 }
 
-async function jsonRequest<T>(path: string, method = 'GET'): Promise<T> {
-  const response = await fetch(path, { method, headers: { accept: 'application/json' }, credentials: 'same-origin' })
+async function jsonRequest<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+  const response = await fetch(path, {
+    method,
+    headers: {
+      accept: 'application/json',
+      ...body === undefined ? {} : { 'content-type': 'application/json' },
+    },
+    credentials: 'same-origin',
+    ...body === undefined ? {} : { body: JSON.stringify(body) },
+  })
   const value: unknown = await response.json().catch(() => undefined)
   if (!response.ok) {
     const message = typeof value === 'object' && value !== null && 'error' in value && typeof value.error === 'string'
@@ -65,6 +74,61 @@ async function jsonRequest<T>(path: string, method = 'GET'): Promise<T> {
     throw new Error(message)
   }
   return value as T
+}
+
+interface XaiImageSettingsValue {
+  model: string
+  models: Array<{ id: string; name: string }>
+}
+
+function XaiImageSettings({ t }: { t: ProviderSettingsInjected['t'] }) {
+  const path = '/plugins/dsh-openai-codex/providers/xai/image-model'
+  const [value, setValue] = useState<XaiImageSettingsValue | undefined>()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | undefined>()
+
+  useEffect(() => {
+    let active = true
+    void jsonRequest<XaiImageSettingsValue>(path).then(
+      next => { if (active) setValue(next) },
+      cause => { if (active) setError(cause instanceof Error ? cause.message : t('imageModelFailed')) },
+    )
+    return () => { active = false }
+  }, [t])
+
+  const update = async (model: string): Promise<void> => {
+    setBusy(true)
+    setError(undefined)
+    try {
+      setValue(await jsonRequest<XaiImageSettingsValue>(path, 'POST', { model }))
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : t('imageModelFailed'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={accountCardStyle}>
+      <div>
+        <div style={providerNameStyle}>{t('imageModel')}</div>
+        <p style={{ ...bodyStyle, marginTop: 3 }}>{t('imageModelHint')}</p>
+      </div>
+      <label style={{ ...accountRowStyle, justifyContent: 'flex-start' }}>
+        <span style={bodyStyle}>{t('imageModelLabel')}</span>
+        <select
+          aria-label={t('imageModelLabel')}
+          style={selectStyle}
+          disabled={value === undefined || busy}
+          value={value?.model ?? ''}
+          onChange={event => { void update(event.currentTarget.value) }}
+        >
+          {value?.models.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
+        </select>
+      </label>
+      {error === undefined ? null : <p style={errorStyle}>{error}</p>}
+    </div>
+  )
 }
 
 function ProviderCard({ name, description, t, onOpen }: {
@@ -184,6 +248,7 @@ function OAuthProviderPage({ kind, t, onBack }: {
         {status.status === 'error' && status.message !== undefined ? <p style={errorStyle}>{status.message}</p> : null}
         {error === undefined ? null : <p style={errorStyle}>{error}</p>}
       </div>
+      {xai ? <XaiImageSettings t={t} /> : null}
       <ProviderEgressSettings provider={xai ? XAI_PROVIDER : GOOGLE_OAUTH_PROVIDER} t={t} />
     </section>
   )

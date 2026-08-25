@@ -34,11 +34,11 @@ Codex 模型从 provider 目录继承其声明的输入模态。现有 dsh Web �
 
 移除独立工具后，早期会话中的 `view_image` 结果仍可读取。Harness 会直接重放持久化的 `tool/result` 消息和附件引用，不要求当前工具注册表仍包含历史名称。模型若再次发起新的 `view_image` 调用，会收到普通的未知工具结果，并可改用 `read_image` 重试。
 
-`imagegen` 始终调用固定的 ChatGPT Codex `gpt-image-2` 端点，与当前对话模型相互独立。调用方仍须声明图片输入能力，因为工具结果包含供下一轮模型使用的图片块。纯生成不带参考图；编辑可以接收最多五个工作区路径，或最近一至五张会话图片附件。这两种选择器互斥。路径读取使用 `ctx.fs`，会话参考图使用附件存储。base64 data URL 只存在于私有的提供方请求中。
+`imagegen` 按当前会话 Provider 分流：OpenAI Codex 使用 `gpt-image-2`，xAI 使用锁定的 pi-ai 0.84.3 目录中所选的 Grok Imagine 2.0 或 Quality。调用方仍须声明图片输入能力，因为结果包含供下一轮使用的图片块。Codex 最多接受五张参考图，xAI 最多三张；工作区路径使用 `ctx.fs`，会话参考图使用附件存储，base64 data URL 只存在于私有 Provider 请求中。
 
-每张生成的 PNG 都会保存为附件并写入当前工作区。`output_path` 用来指定位置；省略时，插件会创建防冲突的 `generated-<时间戳>-<id>.png` 文件名。插件为 `imagegen` 注册了专用工具视图，通过所属会话读取持久附件，在对话中直接显示缩略图并支持查看原图。已发布的 dsh 版本尚未公开二进制写入原语，因此插件包含本地原子写入兼容层；它只处理 `file:` 目标，并在写入前执行当前沙箱策略。非文件执行世界必须提供 `writeBytes`；`dsh-remote-ssh` 已实现该方法，并且只在 AHP 传输内部把字节编码为 base64。远程目标绝不回退到宿主路径。如果沙箱策略或文件系统能力拒绝写入，附件仍然可用，工具结果会报告保存失败。
+每张生成的受支持图片都会保存为附件并写入当前工作区。省略 `output_path` 时，插件会按检测到的 PNG、JPEG、WebP 或 GIF 扩展名创建防冲突文件名。插件为 `imagegen` 注册了专用工具视图，通过所属会话读取持久附件，在对话中直接显示缩略图并支持查看原图。已发布的 dsh 版本尚未公开二进制写入原语，因此插件包含本地原子写入兼容层；它只处理 `file:` 目标，并在写入前执行当前沙箱策略。非文件执行世界必须提供 `writeBytes`；`dsh-remote-ssh` 已实现该方法，并且只在 AHP 传输内部把字节编码为 base64。远程目标绝不回退到宿主路径。如果沙箱策略或文件系统能力拒绝写入，附件仍然可用，工具结果会报告保存失败。
 
-实时设置会持久化两个独立开关。`modifyReadImage` 为每个实时 agent 添加或撤销 scoped `read_image` 定义；关闭后立即恢复 Harness 原始定义及其 Schema。`shareImagegenWithOtherModels` 决定其他提供方的视觉模型能否执行 `imagegen`，Codex 视觉模型始终保留访问权。两项默认均为开启。
+实时设置会持久化两个独立开关与 xAI 图片模型选择。`modifyReadImage` 为每个实时 agent 添加或撤销 scoped `read_image` 定义；关闭后立即恢复 Harness 原始定义及其 Schema。`shareImagegenWithOtherModels` 决定未归属 Provider 的视觉模型能否执行 `imagegen`；Codex 与 xAI 视觉模型始终保留各自原生访问权。两项开关默认均为开启。
 
 ## 搜索与会话历史
 

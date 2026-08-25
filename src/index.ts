@@ -36,7 +36,15 @@ export {
   OPENAI_CODEX_IMAGE_GENERATIONS_URL,
   OPENAI_CODEX_IMAGE_MODEL,
   OpenAICodexImageClient,
+  XAI_IMAGE_EDITS_URL,
+  XAI_IMAGE_GENERATIONS_URL,
+  XaiImageClient,
 } from './imagegen.ts'
+export {
+  DEFAULT_XAI_IMAGE_MODEL,
+  XAI_IMAGE_MODELS,
+} from './xai-images.ts'
+export type { XaiImageModel } from './xai-images.ts'
 export {
   DEFAULT_IMAGE_TOOL_PREFERENCES,
   DEFAULT_RESPONSE_API_PREFERENCES,
@@ -70,6 +78,7 @@ import { OpenAICodexService } from './service.ts'
 import { GOOGLE_OAUTH_PROVIDER, XAI_PROVIDER } from './provider-ids.ts'
 import type { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import { createRoutedGeminiOAuthClient } from './google-oauth.ts'
+import { assertCurrentPiXaiImageCatalog } from './xai-images.ts'
 
 export { OpenAICodexService } from './service.ts'
 export type { OpenAICodexServiceOptions } from './service.ts'
@@ -80,7 +89,11 @@ export {
   OpenAICodexCredentialStore,
   OPENAI_CODEX_AUTH_FILENAME,
   OPENAI_CODEX_PROVIDER,
+  XAI_AUTH_FILENAME,
+  XAI_PROVIDER,
+  XaiCredentialStore,
   openAICodexAuthPath,
+  xaiAuthPath,
 } from './store.ts'
 export {
   DEFAULT_OPENAI_CODEX_SEARCH_CONTEXT_SIZE,
@@ -144,6 +157,7 @@ export const Config: z<Config> = z.object({
  * @param config - standalone-search model, access mode, context size, and output budget.
  */
 export function apply(ctx: Context, config: Config): void {
+  assertCurrentPiXaiImageCatalog()
   installOpenAICodexSearchEvent()
   const service = new OpenAICodexService({
     modifyReadImage: config.modifyReadImage ?? true,
@@ -203,7 +217,7 @@ export function apply(ctx: Context, config: Config): void {
   }))
   ctx.inject(['webServer'], webCtx => registerOpenAICodexAuthRoutes(webCtx, credentials, imageTools, service))
   ctx.inject(['tools', 'fs', 'attachments'], toolCtx => {
-    toolCtx.tools.register(imagegenTool(toolCtx, credentials, imageTools))
+    toolCtx.tools.register(imagegenTool(toolCtx, credentials, service.xaiCredentials, imageTools))
   })
   ctx.inject(['tools', 'fs', 'attachments', 'agents'], toolCtx => {
     installReadImageEnhancement(toolCtx, imageTools)

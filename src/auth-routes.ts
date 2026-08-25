@@ -20,6 +20,7 @@ import type { OpenAICodexUsage } from './usage.ts'
 import type { OpenAICodexService } from './service.ts'
 import { MANAGED_PROVIDERS } from './provider-ids.ts'
 import type { ManagedProvider } from './provider-ids.ts'
+import { XAI_IMAGE_MODELS } from './xai-images.ts'
 
 /** Plugin-owned status endpoint consumed by its browser half. */
 export const OPENAI_CODEX_AUTH_STATUS_PATH = '/plugins/dsh-openai-codex/auth/status'
@@ -37,6 +38,8 @@ export const OPENAI_CODEX_PROXY_SETTINGS_PATH = '/plugins/dsh-openai-codex/proxy
 export const XAI_AUTH_STATUS_PATH = '/plugins/dsh-openai-codex/providers/xai/auth/status'
 export const XAI_AUTH_LOGIN_PATH = '/plugins/dsh-openai-codex/providers/xai/auth/login'
 export const XAI_AUTH_LOGOUT_PATH = '/plugins/dsh-openai-codex/providers/xai/auth/logout'
+/** xAI image-model selection consumed by the xAI Provider subpage. */
+export const XAI_IMAGE_MODEL_SETTINGS_PATH = '/plugins/dsh-openai-codex/providers/xai/image-model'
 /** @kelvinwww/dsh-oauth Google endpoints consumed by its Provider subpage. */
 export const GOOGLE_AUTH_STATUS_PATH = '/plugins/dsh-openai-codex/providers/google/auth/status'
 export const GOOGLE_AUTH_LOGIN_PATH = '/plugins/dsh-openai-codex/providers/google/auth/login'
@@ -398,6 +401,36 @@ export function registerOpenAICodexAuthRoutes(
           if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
           await xaiAuth.signOut()
           json(res, 200, { ok: true })
+        },
+      }),
+      ctx.webServer.register({
+        kind: 'exact',
+        path: XAI_IMAGE_MODEL_SETTINGS_PATH,
+        handler: async (req, res) => {
+          if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
+          if (req.method === 'GET') {
+            return json(res, 200, {
+              ...imageTools.xaiImageSnapshot(),
+              models: XAI_IMAGE_MODELS.map(id => ({
+                id,
+                name: id === 'grok-imagine-image-2.0' ? 'Grok Imagine Image 2.0' : 'Grok Imagine Image Quality',
+              })),
+            })
+          }
+          if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' })
+          try {
+            const body = await readJson(req)
+            if (Object.keys(body).length !== 1) throw new Error('request must contain only model')
+            json(res, 200, {
+              ...await imageTools.updateXaiImageModel(body.model),
+              models: XAI_IMAGE_MODELS.map(id => ({
+                id,
+                name: id === 'grok-imagine-image-2.0' ? 'Grok Imagine Image 2.0' : 'Grok Imagine Image Quality',
+              })),
+            })
+          } catch (error: unknown) {
+            json(res, 400, { error: safeMessage(error) })
+          }
         },
       }),
       ctx.webServer.register({

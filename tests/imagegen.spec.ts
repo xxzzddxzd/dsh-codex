@@ -41,6 +41,13 @@ beforeEach(async () => {
     expires: Date.now() + 3_600_000,
     accountId: 'image-account',
   }))
+  const xaiStore = new OpenAICodex.XaiCredentialStore()
+  await xaiStore.modify(OpenAICodex.XAI_PROVIDER, () => Promise.resolve({
+    type: 'oauth',
+    access: 'xai-image-access',
+    refresh: 'xai-image-refresh',
+    expires: Date.now() + 3_600_000,
+  }))
 })
 
 afterEach(async () => {
@@ -239,6 +246,55 @@ describe('imagegen', () => {
     expect(result.isError).toBe(true)
     expect(result.content.find(block => block.type === 'text')?.text).toContain('disabled for models outside')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('uses xAI OAuth and the current pi image catalog for an xAI conversation', async () => {
+    const ctx = await setup()
+    const fetchMock = successfulFetch()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await generate(ctx, { prompt: 'A rocket over Mars' }, [], 'grok-4.6', OpenAICodex.XAI_PROVIDER)
+
+    expect(result.isError).toBe(false)
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe(OpenAICodex.XAI_IMAGE_GENERATIONS_URL)
+    expect(new Headers(init.headers).get('authorization')).toBe('Bearer xai-image-access')
+    expect(JSON.parse(init.body as string)).toEqual({
+      model: 'grok-imagine-image-2.0',
+      prompt: 'A rocket over Mars',
+      response_format: 'b64_json',
+    })
+  })
+
+  it('sends xAI reference edits as JSON and enforces its three-image limit', async () => {
+    const ctx = await setup()
+    await Promise.all(['one.png', 'two.png'].map(path => writeFile(join(workspace, path), PNG_1X1)))
+    const fetchMock = successfulFetch()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await generate(ctx, {
+      prompt: 'Combine Image 1 and Image 2',
+      referenced_image_paths: ['one.png', 'two.png'],
+    }, [], 'grok-4.6', OpenAICodex.XAI_PROVIDER)
+
+    expect(result.isError).toBe(false)
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe(OpenAICodex.XAI_IMAGE_EDITS_URL)
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      model: 'grok-imagine-image-2.0',
+      images: [
+        { type: 'image_url', url: `data:image/png;base64,${PNG_1X1.toString('base64')}` },
+        { type: 'image_url', url: `data:image/png;base64,${PNG_1X1.toString('base64')}` },
+      ],
+    })
+
+    const rejected = await generate(ctx, {
+      prompt: 'Too many',
+      referenced_image_paths: ['1.png', '2.png', '3.png', '4.png'],
+    }, [], 'grok-4.6', OpenAICodex.XAI_PROVIDER)
+    expect(rejected.isError).toBe(true)
+    expect(rejected.content.find(block => block.type === 'text')?.text).toContain('at most 3')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the attachment but refuses output_path under a read-only filesystem policy', async () => {
