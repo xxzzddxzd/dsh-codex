@@ -4,6 +4,7 @@ import { createModels } from '@earendil-works/pi-ai'
 import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-codex'
 import type { OpenAICodexCredentialStore } from './store.ts'
 import { OPENAI_CODEX_PROVIDER } from './store.ts'
+import { routedProvider } from './routed-provider.ts'
 
 /** Fixed endpoint used by the official Codex client for ChatGPT rate limits. */
 export const OPENAI_CODEX_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage'
@@ -175,7 +176,7 @@ export async function readOpenAICodexRateLimits(
   store: OpenAICodexCredentialStore,
 ): Promise<OpenAICodexUsage> {
   const models = createModels({ credentials: store })
-  models.setProvider(openaiCodexProvider())
+  models.setProvider(routedProvider(openaiCodexProvider(), OPENAI_CODEX_PROVIDER, 'Provider Codex'))
   const auth = await models.getAuth(OPENAI_CODEX_PROVIDER)
   const credential = await store.read(OPENAI_CODEX_PROVIDER)
   const access = auth?.auth.apiKey

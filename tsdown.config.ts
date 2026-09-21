@@ -7,7 +7,6 @@ const CLIENT_EXTERNALS = [
   'react-dom',
   'react-dom/client',
   '@deepseek-ai/cordis',
-  '@deepseek-ai/dsh-client-runtime/client',
 ] as const
 
 export default [
@@ -26,8 +25,8 @@ export default [
     dts: true,
     clean: true,
     deps: {
-      // Compile Kelvin's Google implementation into this bundle so its exact
-      // rc.8 DSH dependencies cannot be hoisted into an rc.2 Host profile.
+      // Compile Kelvin's Google implementation into this bundle so its legacy
+      // DSH dependencies cannot be installed into the current Host profile.
       alwaysBundle: [/^@kelvinwww\/dsh-oauth(?:\/|$)/u],
       neverBundle: [
         '@earendil-works/pi-ai',

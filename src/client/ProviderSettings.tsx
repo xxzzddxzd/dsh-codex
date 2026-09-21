@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import {
   GOOGLE_OAUTH_PROVIDER,
+  OPENAI_CODEX_PROVIDER,
   XAI_PROVIDER,
 } from '../provider-ids.ts'
 import { OpenAICodexSettings } from './OpenAICodexSettings.tsx'
 import type { OpenAICodexSettingsInjected } from './OpenAICodexSettings.tsx'
 import { ProviderEgressSettings } from './ProviderEgress.tsx'
+import { ProviderModels } from './ProviderModels.tsx'
 import type { ProviderSettingsKey } from './provider-locales.ts'
 
 type ProviderPage = 'openai' | 'xai' | 'google'
@@ -255,6 +257,7 @@ function OAuthProviderPage({ kind, t, onBack }: {
         {actionError === undefined ? null : <p role="alert" style={errorStyle}>{actionError}</p>}
       </div>
       {xai ? <XaiImageSettings t={t} /> : null}
+      <ProviderModels provider={xai ? XAI_PROVIDER : GOOGLE_OAUTH_PROVIDER} t={t} />
       <ProviderEgressSettings provider={xai ? XAI_PROVIDER : GOOGLE_OAUTH_PROVIDER} t={t} />
     </section>
   )
@@ -269,6 +272,7 @@ export function ProviderSettings({ t, openaiT }: ProviderSettingsProps) {
       <section style={pageStyle}>
         <SubpageHeader title={t('openaiName')} source={t('sourcePi')} t={t} onBack={() => { setPage(undefined) }} />
         <OpenAICodexSettings t={openaiT} hideHeader />
+        <ProviderModels provider={OPENAI_CODEX_PROVIDER} t={t} />
       </section>
     )
   }

@@ -26,6 +26,9 @@ interface AuthDocument {
   credential: OAuthCredential
 }
 
+/** Listener used to keep the LLM route catalog aligned with stored OAuth state. */
+export type CredentialStateListener = (configured: boolean) => void
+
 /** Whether a filesystem error reports an absent path. */
 function isENOENT(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
@@ -116,6 +119,7 @@ export function xaiAuthPath(dshHome?: string): string {
 export class OpenAICodexCredentialStore implements CredentialStore {
   /** Absolute credential document path. */
   readonly filename: string
+  private readonly stateListeners = new Set<CredentialStateListener>()
 
   /**
    * @param filename - explicit document path, defaulting under `$DSH_HOME`.
@@ -125,6 +129,16 @@ export class OpenAICodexCredentialStore implements CredentialStore {
     private readonly providerId: string = OPENAI_CODEX_PROVIDER,
   ) {
     this.filename = resolve(filename)
+  }
+
+  /** Observe successful writes and deletes performed through this store instance. */
+  onStateChange(listener: CredentialStateListener): () => void {
+    this.stateListeners.add(listener)
+    return () => { this.stateListeners.delete(listener) }
+  }
+
+  private notifyState(configured: boolean): void {
+    for (const listener of this.stateListeners) listener(configured)
   }
 
   /** Read and validate the current document without acquiring the writer lock. */
@@ -161,7 +175,7 @@ export class OpenAICodexCredentialStore implements CredentialStore {
       throw new Error(`${this.providerId}: credential store does not own provider "${providerId}"`)
     }
     await mkdir(dirname(this.filename), { recursive: true, mode: 0o700 })
-    return withFileLock(this.filename, async () => {
+    const result = await withFileLock(this.filename, async () => {
       const current = await this.readCurrent()
       const candidate = await fn(current)
       if (candidate === undefined) return current
@@ -175,6 +189,8 @@ export class OpenAICodexCredentialStore implements CredentialStore {
       })
       return cloneCredential(document.credential)
     })
+    this.notifyState(result?.type === 'oauth')
+    return result
   }
 
   /** @inheritdoc */
@@ -182,6 +198,7 @@ export class OpenAICodexCredentialStore implements CredentialStore {
     if (providerId !== this.providerId) return
     await mkdir(dirname(this.filename), { recursive: true, mode: 0o700 })
     await withFileLock(this.filename, () => rm(this.filename, { force: true }))
+    this.notifyState(false)
   }
 }
 

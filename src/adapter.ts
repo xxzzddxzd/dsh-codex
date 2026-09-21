@@ -15,8 +15,11 @@ import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { OpenAICodexCredentialStore } from './store.ts'
 import type { XaiCredentialStore } from './store.ts'
 import { OPENAI_CODEX_PROVIDER, XAI_PROVIDER } from './store.ts'
+import { routedProvider } from './routed-provider.ts'
 import { OpenAICodexResponseRuntime } from './responses.ts'
 import type { ResponseApiPreferences } from './tool-policy.ts'
+import { modelProfiles } from './model-preferences.ts'
+import type { ProviderModelPreferences } from './model-preferences.ts'
 
 /** Provider idle ceiling used by the composite route. */
 export const OPENAI_CODEX_STREAM_IDLE_TIMEOUT_MS = 300_000
@@ -69,15 +72,17 @@ function requestProvider(provider: Provider): Provider {
 }
 
 /**
- * DSH rc.2 embeds pi-ai 0.82.x while this bundle owns the current pi-ai
- * catalog. Static providers have no refresh hook, so their runtime contract is
- * unchanged; this keeps the version boundary explicit and local.
+ * DSH and this plugin load pi-ai from separate package instances even when
+ * their versions match. Static providers have no refresh hook, so this keeps
+ * that package boundary explicit and local.
  */
-function adapterProvider(provider: Provider): ResolvedPiAiProviderProfile['piProvider'] {
+function adapterProvider(
+  provider: Provider,
+): NonNullable<ResolvedPiAiProviderProfile['piProvider']> {
   if (provider.refreshModels !== undefined) {
-    throw new Error(`dynamic pi-ai provider "${provider.id}" cannot be mounted through the DSH rc.2 adapter`)
+    throw new Error(`dynamic pi-ai provider "${provider.id}" cannot be mounted through the DSH adapter`)
   }
-  return provider as unknown as ResolvedPiAiProviderProfile['piProvider']
+  return provider as unknown as NonNullable<ResolvedPiAiProviderProfile['piProvider']>
 }
 
 /** Preserve Harness call purpose until the generic pi-ai adapter reaches the provider. */
@@ -126,24 +131,26 @@ export function createOpenAICodexAdapter(
   credentials: OpenAICodexCredentialStore,
   resolveAttachments: () => AttachmentStore | undefined,
   responsePreferences: () => ResponseApiPreferences,
+  modelSettings?: ProviderModelPreferences,
 ): PiAiAdapter {
-  const provider = openaiCodexProvider()
+  const provider = routedProvider(openaiCodexProvider(), OPENAI_CODEX_PROVIDER, 'Provider Codex')
   const responses = new OpenAICodexResponseRuntime(responsePreferences)
   const profiles = new Map<string, ResolvedPiAiProviderProfile>([[OPENAI_CODEX_PROVIDER, {
     provider: OPENAI_CODEX_PROVIDER,
-    displayName: 'OpenAI Codex',
+    displayName: 'Provider Codex',
     streamIdleTimeoutMs: OPENAI_CODEX_STREAM_IDLE_TIMEOUT_MS,
     maxRequestImageBytes: DEFAULT_MAX_REQUEST_IMAGE_BYTES,
     requestImagePixelBudget: DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET,
     requestImageMaxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
     retryPolicy: resolveRetryPolicy(undefined, 'dsh-openai-codex retryPolicy'),
+    modelErrors: new Map(),
     configuredMaxTokens: new Map(),
     piProvider: adapterProvider(responses.wrap(requestProvider(provider))),
   }]])
   const models: MutableModels = createModels({ credentials })
   models.setProvider(provider)
   return new OpenAICodexAdapter({
-    profiles: () => profiles,
+    profiles: modelProfiles(profiles, modelSettings),
     resolveApiKey: async () => (await models.getAuth(OPENAI_CODEX_PROVIDER))?.auth.apiKey,
     auth: { credentials, authContext },
     resolveAttachments,
@@ -154,23 +161,25 @@ export function createOpenAICodexAdapter(
 export function createXaiAdapter(
   credentials: XaiCredentialStore,
   resolveAttachments: () => AttachmentStore | undefined,
+  modelSettings?: ProviderModelPreferences,
 ): PiAiAdapter {
-  const provider = xaiProvider()
+  const provider = routedProvider(xaiProvider(), XAI_PROVIDER, 'Provider xAI')
   const profiles = new Map<string, ResolvedPiAiProviderProfile>([[XAI_PROVIDER, {
     provider: XAI_PROVIDER,
-    displayName: 'xAI',
+    displayName: 'Provider xAI',
     streamIdleTimeoutMs: OPENAI_CODEX_STREAM_IDLE_TIMEOUT_MS,
     maxRequestImageBytes: DEFAULT_MAX_REQUEST_IMAGE_BYTES,
     requestImagePixelBudget: DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET,
     requestImageMaxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
     retryPolicy: resolveRetryPolicy(undefined, 'dsh-xai retryPolicy'),
+    modelErrors: new Map(),
     configuredMaxTokens: new Map(),
     piProvider: adapterProvider(requestProvider(provider)),
   }]])
   const models: MutableModels = createModels({ credentials })
   models.setProvider(provider)
   return new PiAiAdapter({
-    profiles: () => profiles,
+    profiles: modelProfiles(profiles, modelSettings),
     resolveApiKey: async () => (await models.getAuth(XAI_PROVIDER))?.auth.apiKey,
     auth: { credentials, authContext },
     resolveAttachments,

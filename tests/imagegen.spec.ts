@@ -6,10 +6,11 @@ import { Context } from '@deepseek-ai/cordis'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import SandboxedFileSystem from '@deepseek-ai/dsh-fs-sandbox'
-import { CallId, createUserMessage, LlmRuntime } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, createUserMessage, LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { Message } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as OpenAICodex from '../src/index.ts'
@@ -70,6 +71,7 @@ async function setup(
   if (sandboxMode === undefined) {
     await ctx.plugin(LocalFileSystem, { cwd: workspace })
   } else {
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: sandboxMode, workspaceRoot: workspace })
     await ctx.plugin(SandboxedFileSystem, { cwd: workspace })
   }
@@ -77,6 +79,12 @@ async function setup(
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(WebRuntime)
   await ctx.plugin(OpenAICodex, config)
+  await vi.waitFor(() => {
+    expect(ctx.llm.listProviders()).toEqual(expect.arrayContaining([
+      { id: OpenAICodex.OPENAI_CODEX_PROVIDER, name: 'Provider Codex' },
+      { id: OpenAICodex.XAI_PROVIDER, name: 'Provider xAI' },
+    ]))
+  })
   return ctx
 }
 
@@ -91,6 +99,9 @@ function agent(
       id: 'imagegen-session',
       events: [],
       header: { cwd: workspace },
+      inheritedEventCount: 0,
+      seq: 0,
+      snapshotEvents: () => [],
       deriveMessages: () => messages,
       requestHeader: () => ({ config: { provider, model } }),
       append: () => undefined,
@@ -107,7 +118,7 @@ async function generate(
 ) {
   return ctx.tools.execute({
     signal,
-    callId: CallId(`imagegen-${++callCounter}`),
+    callId: ToolCallId(`imagegen-${++callCounter}`),
     name: OpenAICodex.IMAGEGEN_TOOL_NAME,
     arguments: args,
     agent: agent(messages, model, provider) as never,

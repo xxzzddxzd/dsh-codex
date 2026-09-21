@@ -7,7 +7,8 @@ Connect subscription providers to [DeepSeek Harness](https://github.com/deepseek
 `dsh-codex` is an independent dsh bundle. It adds:
 
 - ChatGPT OAuth from the dsh Settings panel or a standalone CLI, with automatic token refresh
-- SuperGrok/X Premium OAuth and the pi-ai 0.84.3 xAI catalog, including Grok 4.6
+- OpenAI Codex OAuth with the pi-ai 0.85.1 catalog, including GPT-6 Astra
+- SuperGrok/X Premium OAuth and the same pi-ai catalog, including Grok 4.6
 - Google OAuth and Gemini Code Assist through `@kelvinwww/dsh-oauth`
 - the Codex GPT catalog, including vision-capable models when the account offers them
 - streaming, tool calls, reasoning replay, prompt caching, and dsh compaction through the normal LLM service
@@ -46,13 +47,15 @@ For `dsh-tui`, install the bundle into the same profile:
 dsh plugin --profile dsh-tui add dsh-codex
 ```
 
-After restarting the TUI, `/model` lists the `openai-codex` catalog. With no explicit route or saved selection, the TUI adopts the bundle's `gpt-5.6-sol` default. Use `/codex status|login|logout|usage|config` for the account and live settings; the four boolean settings can be changed with `/codex set <read-image|imagegen-other-models|websocket-context|native-compaction> <on|off>`. Browser login shares the same dsh credential file used by the Web profile.
+After signing in and restarting the TUI, `/model` lists the `provider-codex` catalog. The profile keeps its own default model until you select a Provider model. Use `/codex status|login|logout|usage|config` for the account and live settings; the four boolean settings can be changed with `/codex set <read-image|imagegen-other-models|websocket-context|native-compaction> <on|off>`. Browser login shares the same dsh credential file used by the Web profile.
 
 Codex, Claude Code, and other automation agents should follow [INSTALL.md](INSTALL.md). It is a complete, idempotent runbook and does not require reading this repository's source or design notes.
 
-The bundle selects `openai-codex` / `gpt-5.6-sol` for new agents and selects the Codex search provider. A model already saved in dsh settings still takes precedence; the model picker can select any other Codex model visible to the signed-in account.
+The bundle exposes subscription routes as `provider-codex`, `provider-xai`, and `provider-google`. These names deliberately do not overlap Models-page API-key routes such as `openai-codex` or `xai`. An OAuth-only route appears in the chat model picker only while that Provider is signed in, and the profile's normal default remains unchanged. A model already saved in dsh settings still takes precedence.
 
 ## Provider VLESS routing
+
+Each Provider subpage includes **Chat models**: choose which models appear in chat and override their context window and maximum output tokens. Blank fields use provider defaults; saved changes apply to subsequent requests. Hidden models remain usable by existing sessions. Codex does not enforce the standard output limit parameter.
 
 On the iPhone build with `com.xxzzddxzd.dsh-vless` installed, configure and test the private VLESS Reality node under **Settings → VLESS**. Then open **Settings → Provider**, enter any provider subpage, and choose either **Direct connection** or the configured VLESS node. Each provider keeps an independent selection; replacing a node does not change those selections.
 
@@ -70,7 +73,7 @@ Image support uses dsh's durable attachment path:
 - PNG, JPEG, WebP, and GIF are accepted within the active dsh attachment limits;
 - only a model that explicitly advertises image input may receive an image.
 
-`imagegen` is available to any vision-capable conversation model. Codex conversations use `gpt-image-2`; xAI conversations use the Grok Imagine model selected under **Settings → Provider → xAI**. The current pi-ai catalog exposes Imagine Image 2.0 and Imagine Image Quality. xAI edits accept up to three references; Codex accepts up to five. Every result is shown inline, saved as a durable attachment, and written to the active workspace with its detected PNG/JPEG/WebP/GIF extension.
+`imagegen` is available to any vision-capable conversation model. Provider Codex conversations use `gpt-image-2`; Provider xAI conversations use the Grok Imagine model selected under **Settings → Provider → Provider xAI**. The current pi-ai catalog exposes Imagine Image 2.0 and Imagine Image Quality. xAI edits accept up to three references; Codex accepts up to five. Every result is shown inline, saved as a durable attachment, and written to the active workspace with its detected PNG/JPEG/WebP/GIF extension.
 
 The Settings page has separate **Enhance read_image** and **Image generation for other models** toggles. Both default on. Turning off the first removes the plugin's agent-scoped override and restores Harness's original local-only `read_image` schema. Turning off the second keeps `imagegen` available to Codex vision models and rejects calls from other model providers at execution time.
 
@@ -124,7 +127,7 @@ Keeping the stores separate prevents two clients from racing the same rotating r
 - ChatGPT plan eligibility, model access, quotas, and backend behavior are controlled by OpenAI and may change.
 - The Codex endpoint does not enforce the ordinary Responses `max_output_tokens` field. Compaction works, but its configured summary cap cannot be imposed server-side on this route.
 - Filesystem, shell, skills, MCP, subagents, permissions, attachments, compaction, and the `web_search` tool itself still come from the active dsh profile.
-- The bundle pins pi-ai `0.84.3`; its xAI chat and image settings follow that exact catalog.
+- The bundle pins pi-ai `0.85.1`; its OpenAI Codex, xAI chat, and image settings follow that exact catalog.
 - The standalone search endpoint is not a public OpenAI Platform API. Compatibility follows the pinned Codex/pi-ai implementation.
 
 See [the design document](docs/design.md) for protocol, persistence, and lifecycle details.

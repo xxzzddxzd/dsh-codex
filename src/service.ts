@@ -25,6 +25,7 @@ import type { VlessControllerOptions, VlessStatus } from './vless-controller.ts'
 import type { OpenAICodexProxyHandle } from './proxy.ts'
 import { OPENAI_CODEX_PROVIDER } from './provider-ids.ts'
 import type { ManagedProvider } from './provider-ids.ts'
+import { ProviderModelPreferences } from './model-preferences.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -65,6 +66,7 @@ export interface GoogleOAuthService {
  * Credentials and live policy stay singletons even when several front doors are mounted.
  */
 export class OpenAICodexService {
+  readonly modelSettings = new ProviderModelPreferences()
   readonly credentials = new OpenAICodexCredentialStore()
   readonly xaiCredentials = new XaiCredentialStore()
   readonly policy: ImageToolPolicy
@@ -80,6 +82,7 @@ export class OpenAICodexService {
   /** Attach the durable settings document when the active profile provides it. */
   attachSettings(ctx: Context): void {
     this.policy.attach(ctx)
+    this.modelSettings.attach(ctx)
   }
 
   /** Attach the same long-lived proxy agent used by production Codex requests. */

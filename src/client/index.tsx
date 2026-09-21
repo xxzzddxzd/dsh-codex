@@ -1,11 +1,10 @@
 /** Browser half: OpenAI Codex account management inside dsh Settings. */
 
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
-import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-tool/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type { OpenAICodexSettingsInjected } from './OpenAICodexSettings.tsx'
 import { ProviderSettings } from './ProviderSettings.tsx'
@@ -13,7 +12,6 @@ import type { ProviderSettingsInjected } from './ProviderSettings.tsx'
 import { VlessSettings } from './VlessSettings.tsx'
 import type { VlessSettingsInjected } from './VlessSettings.tsx'
 import { ImagegenToolView } from './ImagegenToolView.tsx'
-import type { ImageLoader } from './ImagegenToolView.tsx'
 import { en, zh } from './locales.ts'
 import type { OpenAICodexSettingsKey } from './locales.ts'
 import { vlessEn, vlessZh } from './vless-locales.ts'
@@ -35,7 +33,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** Stable browser-plugin name. */
 export const name = 'dsh-codex-client'
 /** Client services required by the settings contribution. */
-export const inject = ['slots', 'locale', 'sessions']
+export const inject = ['slots', 'locale']
 
 /** Register account copy and the OpenAI Codex settings page. */
 export function apply(ctx: ClientContext): void {
@@ -48,32 +46,6 @@ export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(namespace) as OpenAICodexSettingsInjected['t']
   const vlessT = ctx.locale.bind(vlessNamespace) as VlessSettingsInjected['t']
   const providerT = ctx.locale.bind(providerNamespace) as ProviderSettingsInjected['t']
-  const imageUrls = new Map<string, Promise<string>>()
-  const createdUrls = new Set<string>()
-  const loadImage = (sessionId: SessionId, attachment: ImageAttachmentRef): Promise<string> => {
-    const key = `${sessionId}:${attachment.attachmentId}`
-    const cached = imageUrls.get(key)
-    if (cached !== undefined) return cached
-    const session = ctx.sessions.binding(sessionId)?.session
-    if (session === undefined) return Promise.reject(new Error(`unknown session ${sessionId}`))
-    const pending = session.readAttachment(attachment.attachmentId).then(result => {
-      if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
-      const bytes = Uint8Array.from(result.value.data)
-      const url = URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer], { type: result.value.attachment.mediaType }))
-      createdUrls.add(url)
-      return url
-    }).catch((error: unknown) => {
-      imageUrls.delete(key)
-      throw error
-    })
-    imageUrls.set(key, pending)
-    return pending
-  }
-  ctx.effect(() => () => {
-    for (const url of createdUrls) URL.revokeObjectURL(url)
-    createdUrls.clear()
-    imageUrls.clear()
-  }, 'dsh-openai-codex: release image URLs')
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'vless',
@@ -91,9 +63,6 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({
     name: 'tool.call.toolview',
     key: 'imagegen',
-    inject: (sessionId: SessionId): { loadImage: ImageLoader; t: OpenAICodexSettingsInjected['t'] } => ({
-      loadImage: attachment => loadImage(sessionId, attachment),
-      t,
-    }),
+    inject: (): { t: OpenAICodexSettingsInjected['t'] } => ({ t }),
   }, ImagegenToolView))
 }

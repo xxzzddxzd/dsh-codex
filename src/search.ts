@@ -15,6 +15,7 @@ import type {
 } from '@deepseek-ai/dsh-web'
 import type { OpenAICodexCredentialStore } from './store.ts'
 import { OPENAI_CODEX_PROVIDER } from './store.ts'
+import { routedProvider } from './routed-provider.ts'
 
 /** Stable dsh web-provider id selected by the bundle patch. */
 export const OPENAI_CODEX_SEARCH_PROVIDER = OPENAI_CODEX_PROVIDER
@@ -232,7 +233,7 @@ export class OpenAICodexSearchProvider implements WebSearchProvider {
    */
   constructor(private readonly options: OpenAICodexSearchProviderOptions) {
     const models = createModels({ credentials: options.credentials })
-    models.setProvider(openaiCodexProvider())
+    models.setProvider(routedProvider(openaiCodexProvider(), OPENAI_CODEX_PROVIDER, 'Provider Codex'))
     this.models = models
   }
 

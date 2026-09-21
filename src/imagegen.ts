@@ -22,6 +22,7 @@ import { imageMediaType } from './read-image-enhancement.ts'
 import type { ImageToolPolicy } from './tool-policy.ts'
 import type { XaiImageModel } from './xai-images.ts'
 import { xaiProvider } from '@earendil-works/pi-ai/providers/xai'
+import { routedProvider } from './routed-provider.ts'
 
 /** Stable Codex-compatible tool name. */
 export const IMAGEGEN_TOOL_NAME = 'imagegen'
@@ -141,7 +142,7 @@ export class OpenAICodexImageClient {
   /** @param credentials - shared refreshable OAuth store. */
   constructor(credentials: OpenAICodexCredentialStore) {
     const models = createModels({ credentials })
-    models.setProvider(openaiCodexProvider())
+    models.setProvider(routedProvider(openaiCodexProvider(), OPENAI_CODEX_PROVIDER, 'Provider Codex'))
     this.models = models
   }
 
@@ -215,7 +216,7 @@ export class XaiImageClient {
     private readonly selectedModel: () => XaiImageModel,
   ) {
     const models = createModels({ credentials })
-    models.setProvider(xaiProvider())
+    models.setProvider(routedProvider(xaiProvider(), XAI_PROVIDER, 'Provider xAI'))
     this.models = models
   }
 
@@ -488,7 +489,7 @@ export function imagegenTool(
       card: 'generic',
       title: args.output_path === undefined ? 'Generate image' : `Generate image ${args.output_path}`,
       kind: args.output_path === undefined ? 'execute' : 'edit',
-      ...args.output_path === undefined ? {} : { locations: [{ path: args.output_path }] },
+      ...(args.output_path === undefined ? {} : { locations: [{ path: args.output_path }] }),
     }),
     presentResult: (args, result) => ({
       card: 'generic',

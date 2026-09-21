@@ -5,11 +5,13 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-codex'
+import { xaiProvider } from '@earendil-works/pi-ai/providers/xai'
+import { ConfigurableProviderAdapter } from './model-preferences.ts'
 import { randomUUID } from 'node:crypto'
 import z from '@deepseek-ai/schemastery'
 import {
   createGeminiService,
-  GeminiCliAdapter,
 } from '@kelvinwww/dsh-oauth/gemini'
 import type {} from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-agent'
@@ -76,8 +78,8 @@ import type { OpenAICodexSearchContextSize, OpenAICodexSearchMode } from './sear
 import { OpenAICodexCredentialStore, OPENAI_CODEX_PROVIDER } from './store.ts'
 import { OpenAICodexService } from './service.ts'
 import { GOOGLE_OAUTH_PROVIDER, XAI_PROVIDER } from './provider-ids.ts'
-import type { LlmAdapter } from '@deepseek-ai/dsh-llm'
-import { createRoutedGeminiOAuthClient } from './google-oauth.ts'
+import type { AdapterRegistrationHandle, LlmAdapter } from '@deepseek-ai/dsh-llm'
+import { createRoutedGeminiOAuthClient, ProviderGoogleAdapter } from './google-oauth.ts'
 import { assertCurrentPiXaiImageCatalog } from './xai-images.ts'
 
 export { OpenAICodexService } from './service.ts'
@@ -151,7 +153,7 @@ export const Config: z<Config> = z.object({
 })
 
 /**
- * Register the `openai-codex` LLM route and standalone web-search provider
+ * Register collision-free Provider routes and the standalone Codex search provider
  * with one provider-native OAuth credential store.
  * @param ctx - plugin context carrying the LLM and web registries plus optional agent and attachment services.
  * @param config - standalone-search model, access mode, context size, and output budget.
@@ -170,30 +172,88 @@ export function apply(ctx: Context, config: Config): void {
   ctx.effect(() => () => { proxy.dispose() }, 'dsh-providers: selective VLESS proxy')
   const credentials = service.credentials
   const imageTools = service.policy
+  const modelSettings = service.modelSettings
+  for (const [route, provider] of [[OPENAI_CODEX_PROVIDER, openaiCodexProvider()], [XAI_PROVIDER, xaiProvider()]] as const) {
+    modelSettings.registerCatalog(route, async () => provider.getModels().map(model => ({
+      id: model.id, name: model.name,
+      defaultContextWindow: model.contextWindow, defaultMaxTokens: model.maxTokens,
+    })))
+  }
   ctx.provide('openAICodex', service)
   ctx.inject(['settings'], settingsCtx => { service.attachSettings(settingsCtx) })
-  ctx.llm.registerAdapter(
-    [OPENAI_CODEX_PROVIDER],
-    createOpenAICodexAdapter(
+
+  /** Keep an OAuth-only route absent from the chat model picker until configured. */
+  const registerWhenAuthenticated = (
+    provider: typeof OPENAI_CODEX_PROVIDER | typeof XAI_PROVIDER,
+    adapter: LlmAdapter,
+    store: OpenAICodexCredentialStore,
+  ): void => {
+    let registration: AdapterRegistrationHandle | undefined
+    let visible = false
+    let disposed = false
+    let stateVersion = 0
+    const update = (authenticated: boolean): void => {
+      if (disposed || authenticated === visible) return
+      try {
+        if (registration === undefined) {
+          if (!authenticated) return
+          registration = ctx.llm.registerAdapter([provider], adapter)
+        } else {
+          registration.replace(authenticated ? [provider] : [])
+        }
+        visible = authenticated
+      } catch (error: unknown) {
+        ctx.logger.warn(`could not ${authenticated ? 'show' : 'hide'} ${provider} models (${error instanceof Error ? error.message : String(error)})`)
+      }
+    }
+    const stop = store.onStateChange(authenticated => {
+      stateVersion += 1
+      update(authenticated)
+    })
+    const initialVersion = stateVersion
+    const stopModels = modelSettings.watch(() => {
+      if (!disposed && visible) registration?.replace([provider])
+    })
+    void store.read(provider).then(
+      credential => {
+        if (stateVersion === initialVersion) update(credential?.type === 'oauth')
+      },
+      error => { ctx.logger.warn(`could not read ${provider} OAuth state (${error instanceof Error ? error.message : String(error)})`) },
+    )
+    ctx.effect(() => () => {
+      disposed = true
+      stop()
+      stopModels()
+    }, `${provider}: authenticated model visibility`)
+  }
+
+  registerWhenAuthenticated(
+    OPENAI_CODEX_PROVIDER,
+    new ConfigurableProviderAdapter(createOpenAICodexAdapter(
       credentials,
       () => ctx.get('attachments'),
       () => imageTools.responseApiSnapshot(),
-    ),
+      modelSettings,
+    ), modelSettings),
+    credentials,
   )
-  ctx.llm.registerAdapter(
-    [XAI_PROVIDER],
-    createXaiAdapter(service.xaiCredentials, () => ctx.get('attachments')),
+  registerWhenAuthenticated(
+    XAI_PROVIDER,
+    new ConfigurableProviderAdapter(createXaiAdapter(service.xaiCredentials, () => ctx.get('attachments'), modelSettings), modelSettings),
+    service.xaiCredentials,
   )
 
   let googleRegistration: ReturnType<typeof ctx.llm.registerAdapter> | undefined
+  let googleAuthenticated = false
   const google = createGeminiService(ctx, {
     createClient: createRoutedGeminiOAuthClient,
     onAuthStateChange: authenticated => {
+      googleAuthenticated = authenticated
       if (googleRegistration === undefined) {
         if (authenticated) {
           googleRegistration = ctx.llm.registerAdapter(
             [GOOGLE_OAUTH_PROVIDER],
-            new GeminiCliAdapter(google) as unknown as LlmAdapter,
+            new ConfigurableProviderAdapter(new ProviderGoogleAdapter(google) as unknown as LlmAdapter, modelSettings),
           )
         }
         return
@@ -201,6 +261,14 @@ export function apply(ctx: Context, config: Config): void {
       googleRegistration.replace(authenticated ? [GOOGLE_OAUTH_PROVIDER] : [])
     },
   })
+  modelSettings.registerCatalog(GOOGLE_OAUTH_PROVIDER, async () => {
+    const adapter = new ProviderGoogleAdapter(google)
+    return (await adapter.listModels(GOOGLE_OAUTH_PROVIDER)).map(model => ({ id: model.id, name: model.name }))
+  })
+  const stopGoogleModels = modelSettings.watch(() => {
+    if (googleAuthenticated) googleRegistration?.replace([GOOGLE_OAUTH_PROVIDER])
+  })
+  ctx.effect(() => stopGoogleModels)
   service.attachGoogle(google)
   void google.initialize().catch(error => {
     ctx.logger.warn(`Google OAuth startup failed (${error instanceof Error ? error.message : String(error)})`)

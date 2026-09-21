@@ -1,11 +1,11 @@
 /** Provider routes exposed by the bundled Provider settings surface. */
 
-/** pi-ai's ChatGPT subscription route. */
-export const OPENAI_CODEX_PROVIDER = 'openai-codex'
-/** pi-ai's SuperGrok/X Premium subscription route. */
-export const XAI_PROVIDER = 'xai'
-/** Google Code Assist route supplied by @kelvinwww/dsh-oauth. */
-export const GOOGLE_OAUTH_PROVIDER = 'gemini-cli-oauth'
+/** ChatGPT subscription route owned by the Provider settings bundle. */
+export const OPENAI_CODEX_PROVIDER = 'provider-codex'
+/** SuperGrok/X Premium subscription route owned by the Provider settings bundle. */
+export const XAI_PROVIDER = 'provider-xai'
+/** Google Code Assist route owned by the Provider settings bundle. */
+export const GOOGLE_OAUTH_PROVIDER = 'provider-google'
 
 /** Every provider whose network exit can be selected independently. */
 export const MANAGED_PROVIDERS = [

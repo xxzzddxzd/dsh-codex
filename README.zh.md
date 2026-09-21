@@ -7,7 +7,8 @@
 `dsh-codex` 是一个独立的 dsh bundle，提供：
 
 - 在 dsh 设置面板或独立 CLI 中完成 ChatGPT OAuth 登录，并自动刷新 token
-- 通过 pi-ai 0.84.3 原生 OAuth 使用 SuperGrok/X Premium 与 xAI 模型目录（含 Grok 4.6）
+- 通过 pi-ai 0.85.1 使用 OpenAI Codex OAuth 与模型目录（含 GPT-6 Astra）
+- 通过同一版 pi-ai 原生 OAuth 使用 SuperGrok/X Premium 与 xAI 模型目录（含 Grok 4.6）
 - 通过 `@kelvinwww/dsh-oauth` 使用 Google OAuth 与 Gemini Code Assist
 - Codex GPT 模型目录；账号提供视觉模型时自动声明其图片输入能力
 - 经标准 LLM 服务运行的流式响应、工具调用、推理回放、提示词缓存与 dsh 压缩
@@ -19,6 +20,8 @@
 ChatGPT 订阅认证与按量计费的 OpenAI API 是不同产品。本插件只使用 ChatGPT Codex 后端，不会把订阅转换成通用 OpenAI API 凭据。
 
 ## 安装
+
+每个 Provider 子页的“对话模型”可选择聊天框显示哪些模型，并分别设置上下文窗口和最大输出 tokens。留空使用默认值，保存后对后续请求生效；隐藏不影响已有会话。Codex 后端不执行标准的输出长度上限参数。
 
 从 npm 把预构建 bundle 安装到选定的 dsh profile：
 
@@ -122,7 +125,7 @@ dsh 登录与 Codex CLI／Desktop 相互独立：
 - ChatGPT 套餐资格、模型权限、配额及后端行为由 OpenAI 控制，可能发生变化。
 - Codex 端点不执行普通 Responses 的 `max_output_tokens` 字段。压缩可以工作，但该路由无法在服务端落实配置的摘要上限。
 - 文件系统、shell、skills、MCP、subagents、权限、附件、压缩和 `web_search` 工具本身仍来自当前 dsh profile。
-- bundle 锁定 pi-ai `0.84.3`，xAI 对话与图片设置严格采用该版本目录。
+- bundle 锁定 pi-ai `0.85.1`，OpenAI Codex、xAI 对话与图片设置严格采用该版本目录。
 - 独立搜索端点不是公开的 OpenAI Platform API；兼容性取决于固定版本的 Codex／pi-ai 实现。
 
 协议、持久化与生命周期细节见[设计文档](docs/design.zh.md)。

@@ -16,7 +16,7 @@ Credentials are stored as a versioned JSON document at `$DSH_HOME/.openai-codex-
 
 ## Model adapter and compaction
 
-The bundle constructs the public `PiAiAdapter` with the installed `openai-codex` provider and model catalog. Its credential resolver refreshes OAuth state and supplies the resulting bearer token as an explicit request credential. It does not discover ambient API keys or require a private dsh adapter helper.
+The bundle constructs the public `PiAiAdapter` with the installed Codex provider and model catalog, aliased to the DSH route `provider-codex`. Its credential resolver refreshes OAuth state and supplies the resulting bearer token as an explicit request credential. The xAI subscription adapter is similarly exposed as `provider-xai`, leaving Models-page API-key routes such as `openai-codex` and `xai` independent.
 
 Normal turns and `dsh-compaction-basic` therefore use the standard LLM service. Message conversion, streaming, tool calls, image attachment resolution, usage, overflow classification, encrypted reasoning replay, and cancellation remain adapter behavior. Codex requests always use `store: false`, so replay data and complete tool-call/result pairs stay in the Harness session rather than relying on server-persisted response ids.
 
@@ -34,7 +34,7 @@ When enabled, the plugin installs an agent-scoped definition that shadows Harnes
 
 Earlier `view_image` results remain readable after the standalone tool is removed. Harness replays the durable `tool/result` message and attachment reference directly; it does not require the current tool registry to contain the historical name. A model that attempts a new `view_image` call receives the ordinary unknown-tool result and can retry with `read_image`.
 
-`imagegen` dispatches by the current conversation provider: OpenAI Codex uses `gpt-image-2`, while xAI uses the selected Grok Imagine 2.0 or Quality model from the pinned pi-ai 0.84.3 catalog. The caller must declare image input because the result contains an image block used by the next turn. Codex accepts up to five reference images and xAI up to three. Workspace paths use `ctx.fs`; conversation references use the attachment store; base64 data URLs remain private to the provider request.
+`imagegen` dispatches by the current conversation provider: OpenAI Codex uses `gpt-image-2`, while xAI uses the selected Grok Imagine 2.0 or Quality model from the pinned pi-ai 0.85.1 catalog. The caller must declare image input because the result contains an image block used by the next turn. Codex accepts up to five reference images and xAI up to three. Workspace paths use `ctx.fs`; conversation references use the attachment store; base64 data URLs remain private to the provider request.
 
 Every generated supported image is saved as an attachment and published into the active workspace. Without `output_path`, the plugin creates a collision-resistant name using the detected PNG, JPEG, WebP, or GIF extension. A keyed `imagegen` tool view resolves the durable attachment through the owning session and displays it inline with an original-size preview. Released dsh versions do not expose a binary write primitive, so the plugin includes an atomic local-file compatibility writer that enforces the active sandbox policy before touching a `file:` target. Non-file execution worlds must expose `writeBytes`; `dsh-remote-ssh` does so and encodes bytes as base64 only inside AHP transport. There is no host-path fallback for a remote target. If policy or filesystem capability rejects the workspace write, the attachment remains available and the result reports the write failure.
 
@@ -50,7 +50,7 @@ The plugin never writes the discontinued generic `web/search-model-request` even
 
 ## Composition
 
-`cordis.patch.yml` contributes one `llm-openai-codex` row, selects `openai-codex` / `gpt-5.6-sol` for new agents, and selects the matching search provider. A model saved in user settings still wins. Shell, filesystem, skills, MCP, subagents, permissions, attachments, compaction, and the `web_search` tool remain supplied by the chosen dsh profile.
+`cordis.patch.yml` contributes one `llm-openai-codex` row and selects the matching search provider. It leaves the profile's default model unchanged; authenticated Provider routes appear dynamically and a model saved in user settings still wins. Shell, filesystem, skills, MCP, subagents, permissions, attachments, compaction, and the `web_search` tool remain supplied by the chosen dsh profile.
 
 ## Consequences
 

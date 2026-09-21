@@ -13,6 +13,7 @@ import {
   XaiCredentialStore,
   XAI_PROVIDER,
 } from './store.ts'
+import { routedProvider } from './routed-provider.ts'
 
 /** Non-secret login state shown by the launcher. */
 export interface OpenAICodexAuthStatus {
@@ -35,7 +36,7 @@ export async function loginOpenAICodex(
   store: OpenAICodexCredentialStore = new OpenAICodexCredentialStore(),
 ): Promise<void> {
   const models = createModels({ credentials: store })
-  models.setProvider(openaiCodexProvider())
+  models.setProvider(routedProvider(openaiCodexProvider(), OPENAI_CODEX_PROVIDER, 'Provider Codex'))
   await models.login(OPENAI_CODEX_PROVIDER, 'oauth', interaction)
 }
 
@@ -69,7 +70,7 @@ export async function loginXai(
   store: XaiCredentialStore = new XaiCredentialStore(),
 ): Promise<void> {
   const models = createModels({ credentials: store })
-  models.setProvider(xaiProvider())
+  models.setProvider(routedProvider(xaiProvider(), XAI_PROVIDER, 'Provider xAI'))
   await models.login(XAI_PROVIDER, 'oauth', interaction)
 }
 

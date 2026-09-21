@@ -339,6 +339,23 @@ export function registerOpenAICodexAuthRoutes(
   const xaiAuth = new XaiWebAuth(service.xaiCredentials)
   ctx.effect(() => {
     const routes = [
+      ...MANAGED_PROVIDERS.map(provider => ctx.webServer.register({
+        kind: 'exact' as const,
+        path: `/plugins/dsh-openai-codex/providers/${provider}/models`,
+        handler: async (req, res) => {
+          if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
+          try {
+            if (req.method === 'POST') {
+              const body = await readJson(req)
+              if (Object.keys(body).some(key => key !== 'models')) throw new Error('Unknown model settings field')
+              await service.modelSettings.update(provider, body.models)
+            } else if (req.method !== 'GET') return json(res, 405, { error: 'method not allowed' })
+            json(res, 200, { models: await service.modelSettings.catalog(provider) })
+          } catch (error: unknown) {
+            json(res, 400, { error: safeMessage(error) })
+          }
+        },
+      })),
       ctx.webServer.register({
         kind: 'exact',
         path: OPENAI_CODEX_AUTH_STATUS_PATH,

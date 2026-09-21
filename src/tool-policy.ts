@@ -1,5 +1,4 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import type { SettingsScope } from '@deepseek-ai/dsh-settings'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import z from '@deepseek-ai/schemastery'
@@ -60,7 +59,7 @@ export const DEFAULT_VLESS_PREFERENCES: VlessPreferences = {
   useVless: false,
 }
 
-const NAMESPACE = settingsNamespace('openai-codex')
+const NAMESPACE = 'openai-codex'
 const schema: z<OpenAICodexPreferences> = z.object({
   modifyReadImage: z.boolean().default(true),
   shareImagegenWithOtherModels: z.boolean().default(true),
@@ -204,7 +203,7 @@ export class ImageToolPolicy {
     const provider = configured?.provider ?? exec.agent?.options.provider
     if (provider === OPENAI_CODEX_PROVIDER || provider === XAI_PROVIDER) return
     if (!this.current.shareImagegenWithOtherModels) {
-      throw new Error(`${tool} is disabled for models outside the openai-codex and xai providers in Settings`)
+      throw new Error(`${tool} is disabled for models outside the Provider Codex and Provider xAI routes in Settings`)
     }
   }
 

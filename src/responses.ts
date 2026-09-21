@@ -18,11 +18,12 @@ import {
   convertResponsesTools,
 } from '@earendil-works/pi-ai/api/openai-responses-shared'
 import type { ResponseApiPreferences } from './tool-policy.ts'
+import { OPENAI_CODEX_PROVIDER } from './provider-ids.ts'
 
 /** Responses endpoint used by the official Codex client, including V2 compaction. */
 export const OPENAI_CODEX_RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses'
 
-const CODEX_TOOL_CALL_PROVIDERS = new Set(['openai', 'openai-codex', 'opencode'])
+const CODEX_TOOL_CALL_PROVIDERS = new Set(['openai', 'openai-codex', OPENAI_CODEX_PROVIDER, 'opencode'])
 const COMPACTION_MARKER_OPEN = '<dsh-openai-codex-compaction-4f5cf1b7-v1>'
 const COMPACTION_MARKER_CLOSE = '</dsh-openai-codex-compaction-4f5cf1b7-v1>'
 const NO_SESSION = '<no-session>'

@@ -1,14 +1,9 @@
-# Optional ChatGPT subscription route over the base composition. The saved
-# agent-default-model setting, when present, still wins over this bundle value.
-
-- id: agent-default-model
-  config:
-    provider: openai-codex
-    model: gpt-5.6-sol
+# Optional subscription routes over the base composition. The profile keeps
+# its own default model until the user signs in and chooses a Provider model.
 
 - id: web
   config:
-    searchProvider: openai-codex
+    searchProvider: provider-codex
 
 - insert:
     - id: llm-openai-codex

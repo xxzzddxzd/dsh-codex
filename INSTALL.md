@@ -76,8 +76,8 @@ dsh --profile web --dump-config
 Require all of these facts:
 
 - `llm-openai-codex` loads `dsh-codex`;
-- `agent-default-model` selects provider `openai-codex` and model `gpt-5.6-sol`, unless a later user setting overrides it;
-- the `web` row selects `searchProvider: openai-codex`;
+- `agent-default-model` keeps the profile's existing default until the user selects a signed-in Provider model;
+- the `web` row selects `searchProvider: provider-codex`;
 - `llm-openai-codex.config.searchMode` equals the selected mode.
 
 Stop and report the exact diagnostic if composition fails. Do not start OAuth while the bundle is absent or malformed.
@@ -132,7 +132,8 @@ Do not report OAuth URLs, authorization codes, token timestamps, account ids, or
 - **Package not found:** confirm the registry is `https://registry.npmjs.org/` and retry the exact package name `dsh-codex`.
 - **Executable not found:** run `dsh plugin --profile <profile> why dsh-codex`, then repeat the add command.
 - **Client entry missing:** confirm the installed package contains `lib/client.js`, restart dsh, and repeat composition validation.
-- **Duplicate provider:** remove only a manually configured `llm-pi-ai.providers.openai-codex` route.
+- **Provider missing from the chat model picker:** sign in on that Provider page. OAuth-only routes are intentionally hidden while signed out.
+- **Duplicate provider:** remove only manually configured `llm-pi-ai` routes named `provider-codex`, `provider-xai`, or `provider-google`; Models-page routes named `openai-codex` and `xai` are independent.
 - **401/403 after login:** run the dedicated login again; do not copy Codex CLI credentials.
 - **OAuth callback cannot bind:** retry with `--device-code`.
 - **Browser account route returns 403:** browser login is loopback-only; use CLI login on the dsh host.

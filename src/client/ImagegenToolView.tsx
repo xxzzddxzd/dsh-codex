@@ -7,11 +7,10 @@ import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import type { OpenAICodexSettingsKey } from './locales.ts'
 
-export type ImageLoader = (attachment: ImageAttachmentRef) => Promise<string>
+export type ImageLoader = ToolCallViewProps['loadImage']
 
 type ImagegenToolViewProps = ToolCallViewProps
   & {
-    loadImage: ImageLoader
     t: (key: OpenAICodexSettingsKey, params?: Record<string, unknown>) => string
   }
 

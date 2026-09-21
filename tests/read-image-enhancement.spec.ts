@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
-import { CallId, LlmRuntime } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, LlmRuntime } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import WebRuntime from '@deepseek-ai/dsh-web'
@@ -24,11 +24,21 @@ let delegatedPaths: string[]
 beforeEach(async () => {
   workspace = await mkdtemp(join(tmpdir(), 'dsh-openai-codex-read-image-'))
   dshHome = await mkdtemp(join(tmpdir(), 'dsh-openai-codex-read-image-home-'))
+  vi.stubEnv('DSH_HOME', dshHome)
+  const store = new OpenAICodex.OpenAICodexCredentialStore()
+  await store.modify(OpenAICodex.OPENAI_CODEX_PROVIDER, () => Promise.resolve({
+    type: 'oauth',
+    access: 'access-token',
+    refresh: 'refresh-token',
+    expires: Date.now() + 60_000,
+    accountId: 'account-1',
+  }))
   delegatedPaths = []
 })
 
 afterEach(async () => {
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
   await ctx?.fiber.dispose()
   ctx = undefined
   await rm(workspace, { recursive: true, force: true })
@@ -94,6 +104,12 @@ async function setup(): Promise<Context> {
   await context.plugin(LlmRuntime)
   await context.plugin(WebRuntime)
   await context.plugin(OpenAICodex)
+  await vi.waitFor(() => {
+    expect(context.llm.listProviders()).toContainEqual({
+      id: OpenAICodex.OPENAI_CODEX_PROVIDER,
+      name: 'Provider Codex',
+    })
+  })
   context.tools.register(enhancedReadImageTool(context, baseReadImage(context)))
   return context
 }
@@ -116,7 +132,7 @@ async function readImage(
 ) {
   return context.tools.execute({
     signal,
-    callId: CallId(`read-image-${++callCounter}`),
+    callId: ToolCallId(`read-image-${++callCounter}`),
     name: OpenAICodex.READ_IMAGE_TOOL_NAME,
     arguments: arguments_,
     agent: agentOn(model) as never,

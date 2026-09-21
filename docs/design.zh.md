@@ -16,7 +16,7 @@ Status: implemented
 
 ## 模型适配器与压缩
 
-bundle 使用公开的 `PiAiAdapter` 以及随附的 `openai-codex` provider 和模型目录。凭据解析器会刷新 OAuth 状态，并把所得 bearer token 作为显式的单次请求凭据传入。它不会发现环境中的 API Key，也不依赖 dsh 的私有适配器辅助函数。
+bundle 使用公开的 `PiAiAdapter` 以及随附的 Codex Provider 和模型目录，并将 DSH 路由命名为 `provider-codex`。xAI 订阅路由同样命名为 `provider-xai`，因此可与“模型”页的 `openai-codex`、`xai` API Key 路由并存。凭据解析器会刷新 OAuth 状态，并把所得 bearer token 作为显式的单次请求凭据传入。
 
 因此，普通轮次与 `dsh-compaction-basic` 都经过标准 LLM 服务。消息转换、流式输出、工具调用、图片附件解析、用量、溢出分类、加密推理回放和取消仍由适配器负责。Codex 请求始终使用 `store: false`，所以回放数据及完整的工具调用／结果配对保存在 Harness session 中，不依赖服务端持久化的 response id。
 
@@ -34,7 +34,7 @@ Codex 模型从 provider 目录继承其声明的输入模态。现有 dsh Web �
 
 移除独立工具后，早期会话中的 `view_image` 结果仍可读取。Harness 会直接重放持久化的 `tool/result` 消息和附件引用，不要求当前工具注册表仍包含历史名称。模型若再次发起新的 `view_image` 调用，会收到普通的未知工具结果，并可改用 `read_image` 重试。
 
-`imagegen` 按当前会话 Provider 分流：OpenAI Codex 使用 `gpt-image-2`，xAI 使用锁定的 pi-ai 0.84.3 目录中所选的 Grok Imagine 2.0 或 Quality。调用方仍须声明图片输入能力，因为结果包含供下一轮使用的图片块。Codex 最多接受五张参考图，xAI 最多三张；工作区路径使用 `ctx.fs`，会话参考图使用附件存储，base64 data URL 只存在于私有 Provider 请求中。
+`imagegen` 按当前会话 Provider 分流：OpenAI Codex 使用 `gpt-image-2`，xAI 使用锁定的 pi-ai 0.85.1 目录中所选的 Grok Imagine 2.0 或 Quality。调用方仍须声明图片输入能力，因为结果包含供下一轮使用的图片块。Codex 最多接受五张参考图，xAI 最多三张；工作区路径使用 `ctx.fs`，会话参考图使用附件存储，base64 data URL 只存在于私有 Provider 请求中。
 
 每张生成的受支持图片都会保存为附件并写入当前工作区。省略 `output_path` 时，插件会按检测到的 PNG、JPEG、WebP 或 GIF 扩展名创建防冲突文件名。插件为 `imagegen` 注册了专用工具视图，通过所属会话读取持久附件，在对话中直接显示缩略图并支持查看原图。已发布的 dsh 版本尚未公开二进制写入原语，因此插件包含本地原子写入兼容层；它只处理 `file:` 目标，并在写入前执行当前沙箱策略。非文件执行世界必须提供 `writeBytes`；`dsh-remote-ssh` 已实现该方法，并且只在 AHP 传输内部把字节编码为 base64。远程目标绝不回退到宿主路径。如果沙箱策略或文件系统能力拒绝写入，附件仍然可用，工具结果会报告保存失败。
 
@@ -50,7 +50,7 @@ bundle 为 dsh 现有的 `web_search` 工具注册提供方。它使用 Codex �
 
 ## 组合
 
-`cordis.patch.yml` 提供一条 `llm-openai-codex` 配置项，为新建 agent 选择 `openai-codex` / `gpt-5.6-sol`，并选择对应的搜索提供方。用户 settings 中已经保存的模型仍然优先。shell、文件系统、skills、MCP、subagents、权限、附件、压缩与 `web_search` 工具仍由选定的 dsh profile 提供。
+`cordis.patch.yml` 提供一条 `llm-openai-codex` 配置项并选择对应的搜索提供方。它不再覆盖 profile 的默认模型；已登录的 Provider 路由会动态出现，用户 settings 中已经保存的模型仍然优先。shell、文件系统、skills、MCP、subagents、权限、附件、压缩与 `web_search` 工具仍由选定的 dsh profile 提供。
 
 ## 后果
 

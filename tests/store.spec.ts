@@ -35,6 +35,8 @@ async function store(): Promise<OpenAICodexCredentialStore> {
 describe('OpenAICodexCredentialStore', () => {
   it('persists, lists, detaches, and removes one OAuth credential owner-only', async () => {
     const auth = await store()
+    const states: boolean[] = []
+    const stop = auth.onStateChange(configured => { states.push(configured) })
     expect(await auth.read(OPENAI_CODEX_PROVIDER)).toBeUndefined()
 
     await auth.modify(OPENAI_CODEX_PROVIDER, () => Promise.resolve(credential()))
@@ -48,6 +50,8 @@ describe('OpenAICodexCredentialStore', () => {
 
     await auth.delete(OPENAI_CODEX_PROVIDER)
     expect(await auth.list()).toEqual([])
+    expect(states).toEqual([true, false])
+    stop()
   })
 
   it('serializes cross-instance refresh writes so each sees the prior value', async () => {

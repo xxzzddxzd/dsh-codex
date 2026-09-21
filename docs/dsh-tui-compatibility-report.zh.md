@@ -69,16 +69,17 @@ host 入口没有 Web 平台限制。`src/index.ts` 会注册：
 
 `dsh-tui/src/channel.ts:2129-2139` 先调用 `llm.listProviders()`，再逐个调用 `llm.listModels(provider.id)`。模型选择器没有 Codex 专用过滤。
 
-`dsh-codex/tests/loader-composition.spec.ts:60-62` 已验证插件装载后：
+`dsh-codex/tests/loader-composition.spec.ts` 已验证插件装载后：
 
-- provider 列表包含 `openai-codex`；
+- 未登录时 provider 列表不包含 `provider-codex`；
+- 登录后 provider 列表包含 `provider-codex`，退出后再次隐藏；
 - 模型列表包含 `gpt-5.6-sol`。
 
 当前 profile 没有安装插件，所以问题出现在 registry 形成之前。
 
-### 3. TUI 不采用 agent-default-model
+### 3. TUI 保留自身默认模型
 
-`dsh-codex/cordis.patch.yml` 把 `agent-default-model` 设为 `openai-codex / gpt-5.6-sol`。Web 和标准 Harness agent 创建流程会使用它。
+`dsh-codex/cordis.patch.yml` 不再覆盖 `agent-default-model`；用户登录并选择 `provider-codex / gpt-5.6-sol` 前，各 profile 保留自身默认模型。
 
 `dsh-tui/src/modelRoute.ts:20-24` 另外定义了 `deepseek-official / deepseek-v4-flash` 作为最终默认值。TUI 的新会话路由优先级是：
 
@@ -244,7 +245,7 @@ TUI 工具卡应显示经过脱敏的 `failure.message`，展开状态再显示 
 ## 跨仓库验收清单
 
 - fresh profile 安装 TUI、dsh-codex 与 Remote SSH 后能一次完成 composition；
-- `/model` 能看到并切换 `openai-codex / gpt-5.6-sol`；
+- 登录后 `/model` 能看到并切换 `provider-codex / gpt-5.6-sol`，退出后该路由消失；
 - 新会话、resume、rewind、fork 和 model switch 保持合法 route；
 - `/codex status` 不泄露 token，已有 Web 登录可复用；
 - 普通 Codex 请求能显示 reasoning、token、cache 与 retry 状态；

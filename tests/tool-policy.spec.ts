@@ -3,6 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { SettingsProvider } from '@deepseek-ai/dsh-settings'
 import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import { ImageToolPolicy } from '../src/tool-policy.ts'
+import { OPENAI_CODEX_PROVIDER, XAI_PROVIDER } from '../src/provider-ids.ts'
 
 class MemorySettings extends SettingsProvider {
   readonly writable = true
@@ -97,8 +98,8 @@ describe('ImageToolPolicy', () => {
       },
     }) as never
 
-    expect(() => policy.assertAllowed(execution('openai-codex'), 'imagegen')).not.toThrow()
-    expect(() => policy.assertAllowed(execution('xai'), 'imagegen')).not.toThrow()
+    expect(() => policy.assertAllowed(execution(OPENAI_CODEX_PROVIDER), 'imagegen')).not.toThrow()
+    expect(() => policy.assertAllowed(execution(XAI_PROVIDER), 'imagegen')).not.toThrow()
     expect(() => policy.assertAllowed(execution('another-provider'), 'imagegen')).toThrow('disabled for models outside')
   })
 })
