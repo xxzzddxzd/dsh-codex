@@ -80,9 +80,9 @@ export class OpenAICodexService {
   }
 
   /** Attach the durable settings document when the active profile provides it. */
-  attachSettings(ctx: Context): void {
-    this.policy.attach(ctx)
-    this.modelSettings.attach(ctx)
+  async attachSettings(ctx: Context): Promise<void> {
+    await this.policy.attach(ctx)
+    await this.modelSettings.attach(ctx)
   }
 
   /** Attach the same long-lived proxy agent used by production Codex requests. */

@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { SettingsScope } from '@deepseek-ai/dsh-settings'
+import { ProviderPreferencesScope } from './preferences.ts'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import z from '@deepseek-ai/schemastery'
 import {
@@ -76,7 +76,7 @@ const schema: z<OpenAICodexPreferences> = z.object({
 /** Live policy shared by the host tools, Codex adapter, and settings HTTP surface. */
 export class ImageToolPolicy {
   private current: OpenAICodexPreferences
-  private scope: SettingsScope<OpenAICodexPreferences> | undefined
+  private scope: ProviderPreferencesScope<OpenAICodexPreferences> | undefined
   private readonly imageWatchers = new Set<() => void>()
 
   constructor(base: Partial<OpenAICodexPreferences> = {}) {
@@ -96,8 +96,8 @@ export class ImageToolPolicy {
   }
 
   /** Register durable live settings when the active profile supplies ctx.settings. */
-  attach(ctx: Context): void {
-    const scope = ctx.settings.register(NAMESPACE, schema, { base: this.current, applies: 'live' })
+  async attach(ctx: Context): Promise<void> {
+    const scope = await ProviderPreferencesScope.open(ctx, NAMESPACE, schema, this.current)
     this.scope = scope
     this.replace(scope.get())
     const unwatch = scope.watch(next => { this.replace(next) })

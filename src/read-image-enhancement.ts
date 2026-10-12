@@ -5,7 +5,6 @@ import type { Context } from '@deepseek-ai/cordis'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
@@ -201,12 +200,7 @@ export function enhancedReadImageTool(ctx: Context, original: ToolDefinition): T
           ...ref.name === undefined ? {} : { name: ref.name },
         },
       }
-      if (exec.parent !== undefined) {
-        exec.deferContext(createUserMessage({
-          content: contentOf(value),
-          source: { kind: 'plugin', plugin: 'dsh-openai-codex' },
-        }))
-      }
+
       return value
     },
     presentCall: args => {
@@ -264,7 +258,7 @@ export function installReadImageEnhancement(ctx: Context, policy: ImageToolPolic
     }
   }
 
-  ctx.on('agent/created', ({ agent }) => { syncAgent(agent) })
+  ctx.on('agent/created', ({ agent }) => { syncAgent(agent); return undefined })
   ctx.on('agent/disposed', ({ agent }) => { installed.delete(agent) })
   ctx.on('tools/change', syncAll)
   const stopPolicy = policy.watchImagePreferences(syncAll)

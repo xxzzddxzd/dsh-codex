@@ -1,7 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { SettingsProvider } from '@deepseek-ai/dsh-settings'
-import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
+import { preferenceContext } from './preference-context.ts'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { createOpenAICodexAdapter, createXaiAdapter } from '../src/adapter.ts'
 import { ProviderModelPreferences, ConfigurableProviderAdapter } from '../src/model-preferences.ts'
 import { OpenAICodexCredentialStore, XaiCredentialStore } from '../src/store.ts'
@@ -11,26 +13,24 @@ import { ProviderGoogleAdapter } from '../src/google-oauth.ts'
 import type { GeminiTransport } from '@kelvinwww/dsh-oauth/gemini'
 import type { LlmAdapter } from '@deepseek-ai/dsh-llm'
 
-let stored: Record<string, unknown> = {}
-class MemorySettings extends SettingsProvider {
-  readonly writable = true
-  protected async load() { return structuredClone(stored) }
-  protected async persist(ns: SettingsNamespace, section: Record<string, unknown>) {
-    stored = { ...stored, [String(ns)]: structuredClone(section) }
-    this.publish(stored)
-  }
-}
+let directory: string | undefined
 let ctx: Context | undefined
 async function setup() {
-  ctx = new Context()
-  await ctx.plugin(MemorySettings)
+  if (directory === undefined) directory = await mkdtemp(join(tmpdir(), 'dsh-model-preferences-'))
+  vi.stubEnv('DSH_HOME', directory)
+  ctx = await preferenceContext(directory)
   const settings = new ProviderModelPreferences()
-  settings.attach(ctx)
+  await settings.attach(ctx)
   settings.registerCatalog(CODEX, async () => [{ id: 'gpt-6-astra', name: 'GPT-6 Astra', defaultContextWindow: 272000, defaultMaxTokens: 128000 }])
   settings.registerCatalog(XAI, async () => [{ id: 'grok-4.6', name: 'Grok 4.6' }])
   return settings
 }
-afterEach(async () => { await ctx?.fiber.dispose(); stored = {} })
+afterEach(async () => {
+  await ctx?.fiber.dispose()
+  if (directory !== undefined) await rm(directory, { recursive: true, force: true })
+  directory = undefined
+  vi.unstubAllEnvs()
+})
 
 describe('Provider model preferences', () => {
   it('sends the frozen Google output limit in the actual transport payload', async () => {

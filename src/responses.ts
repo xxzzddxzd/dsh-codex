@@ -7,7 +7,7 @@ import type {
   AssistantMessage,
   AssistantMessageEventStream,
   Api,
-  Context as PiContext,
+  TranscriptContext as PiContext,
   Model,
   Provider,
   SimpleStreamOptions,
@@ -17,6 +17,7 @@ import {
   convertResponsesMessages,
   convertResponsesTools,
 } from '@earendil-works/pi-ai/api/openai-responses-shared'
+import { normalizeContext, getCurrentTools, getCurrentSystemPrompt } from '@earendil-works/pi-ai/utils/transcript'
 import type { ResponseApiPreferences } from './tool-policy.ts'
 import { OPENAI_CODEX_PROVIDER } from './provider-ids.ts'
 
@@ -415,16 +416,17 @@ export class OpenAICodexResponseRuntime {
     const messages = context.messages.length === 0 ? [] : context.messages.slice(0, -1)
     const input = expandNativeCompactionMarkers(convertResponsesMessages(
       model,
-      { ...context, messages },
+      normalizeContext({ messages }),
       CODEX_TOOL_CALL_PROVIDERS,
       { includeSystemPrompt: false },
     ))
     const compat = model.compat as { supportsStrictMode?: boolean; supportsOpenAIGrammarTools?: boolean } | undefined
     const supportsStrictMode = compat?.supportsStrictMode ?? true
     const supportsOpenAIGrammarTools = compat?.supportsOpenAIGrammarTools ?? false
-    const tools = context.tools === undefined || context.tools.length === 0
+    const declaredTools = getCurrentTools(messages)
+    const tools = declaredTools.length === 0
       ? undefined
-      : convertResponsesTools(context.tools, {
+      : convertResponsesTools(declaredTools, {
           strict: null,
           supportsStrictMode,
           supportsOpenAIGrammarTools,
@@ -438,7 +440,7 @@ export class OpenAICodexResponseRuntime {
       store: false,
       stream: true,
       input: [...input, { type: 'compaction_trigger' }],
-      instructions: context.systemPrompt ?? '',
+      instructions: getCurrentSystemPrompt(messages) ?? '',
       ...tools === undefined ? {} : { tools },
       tool_choice: 'auto',
       parallel_tool_calls: true,

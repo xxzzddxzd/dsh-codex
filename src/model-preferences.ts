@@ -1,6 +1,6 @@
 /** Durable per-model display and capacity overrides for OAuth providers. */
 import type { Context } from '@deepseek-ai/cordis'
-import type { SettingsScope } from '@deepseek-ai/dsh-settings'
+import { ProviderPreferencesScope } from './preferences.ts'
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import type { ResolvedPiAiProviderProfile } from '@deepseek-ai/dsh-llm-pi-ai'
@@ -21,11 +21,11 @@ const schema: z<Preferences> = z.object({ providers: z.dict(z.array(z.object({
 
 export class ProviderModelPreferences {
   private current: Preferences = { providers: {} }
-  private scope: SettingsScope<Preferences> | undefined
+  private scope: ProviderPreferencesScope<Preferences> | undefined
   private listeners = new Set<() => void>()
   private catalogs = new Map<ManagedProvider, () => Promise<ModelSettingsRow[]>>()
-  attach(ctx: Context): void {
-    const scope = ctx.settings.register('provider-models', schema, { base: this.current, applies: 'live' })
+  async attach(ctx: Context): Promise<void> {
+    const scope = await ProviderPreferencesScope.open(ctx, 'provider-models', schema, this.current)
     this.scope = scope
     this.current = scope.get()
     const stop = scope.watch(next => {

@@ -2,12 +2,14 @@
 
 [English](README.md) | 中文
 
+DSH 0.2.0-rc.2 配套版本为本地 bundle 0.2.7。模型与工具偏好使用官方 storage domain，首次导入旧 settings 文档，保留原文件；PTC 图片补充上下文由官方工具调度器统一生成，Responses 原生压缩使用 pi-ai 的规范化 transcript。
+
 在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 中连接订阅 Provider，无需修改 DSH。bundle 包含 pi-ai 的 OpenAI Codex、xAI，以及来自 `@kelvinwww/dsh-oauth` 的 Google Code Assist OAuth。
 
 `dsh-codex` 是一个独立的 dsh bundle，提供：
 
 - 在 dsh 设置面板或独立 CLI 中完成 ChatGPT OAuth 登录，并自动刷新 token
-- 通过 pi-ai 0.85.1 使用 OpenAI Codex OAuth 与模型目录（含 GPT-6 Astra）
+- 通过 pi-ai 0.87.1 使用 OpenAI Codex OAuth 与模型目录（含 GPT-6 Astra）
 - 通过同一版 pi-ai 原生 OAuth 使用 SuperGrok/X Premium 与 xAI 模型目录（含 Grok 4.6）
 - 通过 `@kelvinwww/dsh-oauth` 使用 Google OAuth 与 Gemini Code Assist
 - Codex GPT 模型目录；账号提供视觉模型时自动声明其图片输入能力
@@ -49,11 +51,11 @@ dsh plugin --profile web exec dsh-openai-codex logout
 dsh plugin --profile dsh-tui add dsh-codex
 ```
 
-重新启动 TUI 后，`/model` 会列出 `openai-codex` 的模型；没有显式模型配置或已保存选择时，TUI 会采用 bundle 注册的 `gpt-5.6-sol`。`/codex status|login|logout|usage|config` 用于管理账号与查看配置，四个布尔开关可通过 `/codex set <read-image|imagegen-other-models|websocket-context|native-compaction> <on|off>` 修改。浏览器登录完成后，凭据与 Web profile 共用同一份 dsh 凭据文件。
+重新启动 TUI 后，`/model` 会列出 `provider-codex` 的模型；profile 保留自己的默认模型，直到用户选择新的 Provider 模型。`/codex status|login|logout|usage|config` 用于管理账号与查看配置，四个布尔开关可通过 `/codex set <read-image|imagegen-other-models|websocket-context|native-compaction> <on|off>` 修改。浏览器登录完成后，凭据与 Web profile 共用同一份 dsh 凭据文件。
 
 Codex、Claude Code 及其他自动化 agent 应直接遵循 [INSTALL.md](INSTALL.md)。它是一份完整且可重复执行的 runbook，不要求安装者阅读源码或设计文档。
 
-bundle 会为新建 agent 选择 `openai-codex` / `gpt-5.6-sol`，并选择 Codex 搜索提供方。dsh settings 中已经保存的模型仍然优先；模型选择器可以切换到当前账号可用的其他 Codex 模型。
+bundle 提供 `provider-codex`、`provider-xai` 和 `provider-google` 订阅路由。模型页的 API Key 路由保持 `openai-codex`、`xai` 等原名；登录对应 Provider 后，其 OAuth 模型才会加入聊天模型选择器。profile 保留原有默认模型，已保存的会话选择仍然优先；Web 搜索使用 `provider-codex`。
 
 ## Provider VLESS 分流
 
@@ -125,7 +127,7 @@ dsh 登录与 Codex CLI／Desktop 相互独立：
 - ChatGPT 套餐资格、模型权限、配额及后端行为由 OpenAI 控制，可能发生变化。
 - Codex 端点不执行普通 Responses 的 `max_output_tokens` 字段。压缩可以工作，但该路由无法在服务端落实配置的摘要上限。
 - 文件系统、shell、skills、MCP、subagents、权限、附件、压缩和 `web_search` 工具本身仍来自当前 dsh profile。
-- bundle 锁定 pi-ai `0.85.1`，OpenAI Codex、xAI 对话与图片设置严格采用该版本目录。
+- bundle 锁定 pi-ai `0.87.1`，OpenAI Codex、xAI 对话与图片设置严格采用该版本目录。
 - 独立搜索端点不是公开的 OpenAI Platform API；兼容性取决于固定版本的 Codex／pi-ai 实现。
 
 协议、持久化与生命周期细节见[设计文档](docs/design.zh.md)。

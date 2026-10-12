@@ -166,7 +166,7 @@ describe('OpenAI Codex compaction request', () => {
       }),
       createUserMessage({
         content: [{ type: 'text', text: 'Summarize the conversation for compaction.' }],
-        source: { kind: 'plugin', plugin: 'compaction-basic' },
+        source: { kind: 'user' },
       }),
     ]
 
@@ -189,7 +189,7 @@ describe('OpenAI Codex compaction request', () => {
       sessionId: 'session-compaction' as never,
     })) assembler.push(chunk)
 
-    expect(assembler.message({ kind: 'model', provider: CODEX_PROVIDER, model: 'gpt-5.6-sol' }).content)
+    expect(assembler.message({ provider: CODEX_PROVIDER, model: 'gpt-5.6-sol' }).content)
       .toEqual([{ type: 'text', text: 'summary' }])
     if (request === undefined) throw new Error('Codex request was not captured')
     const captured = request as { url: string; init: RequestInit }
@@ -278,13 +278,12 @@ describe('OpenAI Codex compaction request', () => {
         userMessage('keep this request'),
         createUserMessage({
           content: [{ type: 'text', text: 'private Harness summary instruction' }],
-          source: { kind: 'plugin', plugin: 'compaction-basic' },
+          source: { kind: 'user' },
         }),
       ],
       sessionId: 'session-native-compact' as never,
     })) compacted.push(chunk)
     const marker = compacted.message({
-      kind: 'model',
       provider: CODEX_PROVIDER,
       model: 'gpt-5.6-sol',
     }).content
@@ -297,7 +296,7 @@ describe('OpenAI Codex compaction request', () => {
       messages: [
         createUserMessage({
           content: marker,
-          source: { kind: 'plugin', plugin: 'compaction-basic' },
+          source: { kind: 'user' },
         }),
         userMessage('continue'),
       ],
@@ -377,14 +376,13 @@ describe('OpenAI Codex compaction request', () => {
         userMessage('keep this request'),
         createUserMessage({
           content: [{ type: 'text', text: 'Summarize the conversation.' }],
-          source: { kind: 'plugin', plugin: 'compaction-basic' },
+          source: { kind: 'user' },
         }),
       ],
       sessionId: 'session-native-fallback' as never,
     })) assembler.push(chunk)
 
     expect(assembler.message({
-      kind: 'model',
       provider: CODEX_PROVIDER,
       model: 'gpt-5.6-sol',
     }).content).toEqual([{ type: 'text', text: 'fallback summary' }])

@@ -9,7 +9,6 @@ import type { Context } from '@deepseek-ai/cordis'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ImageMediaType } from '@deepseek-ai/dsh-attachment'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
@@ -313,7 +312,6 @@ function contentOf(value: ImagegenValue): ContentBlock[] {
 function collectImageRefs(content: readonly ContentBlock[], output: ImageAttachmentRef[]): void {
   for (const block of content) {
     if (block.type === 'image') output.push(block.attachment)
-    else if (block.type === 'tool-result') collectImageRefs(block.content, output)
   }
 }
 
@@ -477,12 +475,7 @@ export function imagegenTool(
         const detail = (error instanceof Error ? error.message : String(error)).slice(0, 1000)
         value.writeError = `generated image was not written to ${JSON.stringify(outputPath)}: ${detail}`
       }
-      if (exec.parent !== undefined) {
-        exec.deferContext(createUserMessage({
-          content: contentOf(value),
-          source: { kind: 'plugin', plugin: 'dsh-openai-codex' },
-        }))
-      }
+
       return value
     },
     presentCall: args => ({

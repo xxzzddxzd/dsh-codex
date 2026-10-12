@@ -1,38 +1,35 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { SettingsProvider } from '@deepseek-ai/dsh-settings'
-import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
+import { preferenceContext } from './preference-context.ts'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { ImageToolPolicy } from '../src/tool-policy.ts'
 import { OPENAI_CODEX_PROVIDER, XAI_PROVIDER } from '../src/provider-ids.ts'
 
-class MemorySettings extends SettingsProvider {
-  readonly writable = true
-  private stored: Record<string, unknown> = {}
-
-  protected load(): Promise<Record<string, unknown>> {
-    return Promise.resolve(structuredClone(this.stored))
-  }
-
-  protected async persist(ns: SettingsNamespace, section: Record<string, unknown>): Promise<void> {
-    this.stored = { ...this.stored, [String(ns)]: structuredClone(section) }
-    this.publish(this.stored)
-  }
-}
 
 let context: Context | undefined
+let directory: string | undefined
+async function setup() {
+  directory = await mkdtemp(join(tmpdir(), 'dsh-tool-preferences-'))
+  vi.stubEnv('DSH_HOME', directory)
+  context = await preferenceContext(directory)
+  return context
+}
 
 afterEach(async () => {
   await context?.fiber.dispose()
   context = undefined
+  if (directory !== undefined) await rm(directory, { recursive: true, force: true })
+  directory = undefined
+  vi.unstubAllEnvs()
 })
 
 describe('ImageToolPolicy', () => {
   it('persists independent live toggles through the dsh settings seam', async () => {
-    const ctx = new Context()
-    context = ctx
-    await ctx.plugin(MemorySettings)
+    const ctx = await setup()
     const policy = new ImageToolPolicy()
-    policy.attach(ctx)
+    await policy.attach(ctx)
 
     expect(policy.snapshot()).toEqual({
       modifyReadImage: true,
@@ -63,14 +60,12 @@ describe('ImageToolPolicy', () => {
   })
 
   it('notifies the read_image enhancer when its live setting changes', async () => {
-    const ctx = new Context()
-    context = ctx
-    await ctx.plugin(MemorySettings)
+    const ctx = await setup()
     const policy = new ImageToolPolicy({
       modifyReadImage: true,
       shareImagegenWithOtherModels: false,
     })
-    policy.attach(ctx)
+    await policy.attach(ctx)
     let changes = 0
     policy.watchImagePreferences(() => { changes++ })
 

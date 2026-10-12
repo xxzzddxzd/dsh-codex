@@ -13,7 +13,7 @@ describe('@kelvinwww/dsh-oauth Google transport', () => {
     expect(client.transporter.defaults.fetchImplementation).toBe(globalThis.fetch)
   })
 
-  it('registers the Kelvin Gemini adapter on the DSH 0.1.5 LLM seam', async () => {
+  it('registers the Kelvin Gemini adapter on the DSH 0.2.0 LLM seam', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     const transport = {
