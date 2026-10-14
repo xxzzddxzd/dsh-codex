@@ -9,6 +9,9 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import type { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import WebRuntime from '@deepseek-ai/dsh-web'
+import Storage from '@deepseek-ai/dsh-storage'
+import * as StorageJson from '@deepseek-ai/dsh-storage-json'
+import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import * as OpenAICodex from '../src/index.ts'
 
 let root: string | undefined
@@ -59,6 +62,22 @@ describe('OpenAI Codex real composition', () => {
       config: { path: pathToFileURL(configPath).href },
     })
     await ctx.loader.await()
+    expect(ctx.openAICodex.settingsReady).toBe(false)
+
+    // The Host mounts storage independently; preference consumers must declare
+    // both the hub they access and the domain facility they wait for.
+    await ctx.plugin(Storage)
+    await ctx.plugin(StorageJson, { root: join(root, 'storages') })
+    await ctx.plugin(StorageDomain, { backend: 'json' })
+    await vi.waitFor(async () => {
+      expect(ctx.openAICodex.settingsReady).toBe(true)
+      await expect(ctx.openAICodex.modelSettings.update(OpenAICodex.OPENAI_CODEX_PROVIDER,
+        [{ id: 'gpt-6.1-sol', maxTokens: 8192 }])).resolves.toBeUndefined()
+    })
+    expect(await ctx.openAICodex.modelSettings.catalog(OpenAICodex.OPENAI_CODEX_PROVIDER))
+      .toContainEqual(expect.objectContaining({ id: 'gpt-6.1-sol', maxTokens: 8192 }))
+    await expect(ctx.openAICodex.policy.updateResponseApi({ useNativeCompaction: true }))
+      .resolves.toMatchObject({ useNativeCompaction: true })
 
     await vi.waitFor(() => { expect(ctx.llm.listProviders()).toEqual([]) })
 
@@ -118,5 +137,12 @@ describe('OpenAI Codex real composition', () => {
     await entry.fiber.dispose()
     expect(ctx.llm.listProviders()).toEqual([{ id: 'xai', name: 'xAI' }])
     nativeXaiRegistration()
+
+    await ctx.loader.create({ name: 'dsh-codex' })
+    await ctx.loader.await()
+    await vi.waitFor(() => { expect(ctx.openAICodex.settingsReady).toBe(true) })
+    expect(await ctx.openAICodex.modelSettings.catalog(OpenAICodex.OPENAI_CODEX_PROVIDER))
+      .toContainEqual(expect.objectContaining({ id: 'gpt-6.1-sol', maxTokens: 8192 }))
+    expect(ctx.openAICodex.policy.responseApiSnapshot().useNativeCompaction).toBe(true)
   })
 })

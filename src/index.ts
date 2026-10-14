@@ -181,7 +181,7 @@ export function apply(ctx: Context, config: Config): void {
     })))
   }
   ctx.provide('openAICodex', service)
-  ctx.inject(['storageDomain'], async settingsCtx => { await service.attachSettings(settingsCtx) })
+  ctx.inject(['storage', 'storageDomain'], async settingsCtx => { await service.attachSettings(settingsCtx) })
 
   /** Keep an OAuth-only route absent from the chat model picker until configured. */
   const registerWhenAuthenticated = (

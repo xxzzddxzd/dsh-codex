@@ -85,6 +85,9 @@ export class OpenAICodexService {
     await this.modelSettings.attach(ctx)
   }
 
+  /** Both durable settings scopes must be mounted before accepting deployment. */
+  get settingsReady(): boolean { return this.policy.ready && this.modelSettings.ready }
+
   /** Attach the same long-lived proxy agent used by production Codex requests. */
   attachProxy(proxy: OpenAICodexProxyHandle): void {
     this.proxy = proxy

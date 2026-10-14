@@ -346,7 +346,7 @@ export function registerOpenAICodexAuthRoutes(
         handler: (req, res) => {
           if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
           if (req.method !== 'GET') return json(res, 405, { error: 'method not allowed' })
-          json(res, 200, describeProviderComponents())
+          json(res, 200, { ...describeProviderComponents(), settings: { ready: service.settingsReady } })
         },
       }),
       ...MANAGED_PROVIDERS.map(provider => ctx.webServer.register({

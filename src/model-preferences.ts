@@ -24,6 +24,7 @@ export class ProviderModelPreferences {
   private scope: ProviderPreferencesScope<Preferences> | undefined
   private listeners = new Set<() => void>()
   private catalogs = new Map<ManagedProvider, () => Promise<ModelSettingsRow[]>>()
+  get ready(): boolean { return this.scope !== undefined }
   async attach(ctx: Context): Promise<void> {
     const scope = await ProviderPreferencesScope.open(ctx, 'provider-models', schema, this.current)
     this.scope = scope

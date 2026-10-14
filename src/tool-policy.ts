@@ -79,6 +79,8 @@ export class ImageToolPolicy {
   private scope: ProviderPreferencesScope<OpenAICodexPreferences> | undefined
   private readonly imageWatchers = new Set<() => void>()
 
+  get ready(): boolean { return this.scope !== undefined }
+
   constructor(base: Partial<OpenAICodexPreferences> = {}) {
     this.current = {
       ...DEFAULT_IMAGE_TOOL_PREFERENCES,

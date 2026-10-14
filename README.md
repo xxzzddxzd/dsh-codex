@@ -2,9 +2,9 @@
 
 English | [中文](README.zh.md)
 
-Local bundle 0.2.8 targets DSH 0.2.0-rc.2. Provider preferences use the official storage domain and import either legacy settings filename once. The Harness PTC scheduler owns deferred image context; native Responses compaction reads the normalized pi-ai transcript.
+Local bundle 0.2.9 targets DSH 0.2.0-rc.2. Provider preferences use the official storage domain and import either legacy settings filename once. The Harness PTC scheduler owns deferred image context; native Responses compaction reads the normalized pi-ai transcript.
 
-The bundle pins pi-ai 1.2.0 and exposes GPT-6.1 Sol from its upstream catalog. DSH's own adapter dependency remains on its compatible version. Image discovery uses the unified model catalog, and route aliases preserve chat and image model identities. The authenticated, same-origin `GET /plugins/dsh-openai-codex/components` endpoint reports the loaded bundle/dependency versions and static model IDs for deployment checks.
+The bundle pins pi-ai 1.2.0 and exposes GPT-6.1 Sol from its upstream catalog. DSH's own adapter dependency remains on its compatible version. Image discovery uses the unified model catalog, and route aliases preserve chat and image model identities. The authenticated, same-origin `GET /plugins/dsh-openai-codex/components` endpoint reports the loaded bundle/dependency versions, static model IDs, and durable-settings readiness for deployment checks. The settings consumer declares both storage services so model, image, and routing preferences can save in the real Host composition.
 
 Connect subscription providers to [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) without patching DSH. The bundle includes pi-ai's OpenAI Codex and xAI providers plus the Google Code Assist OAuth implementation from `@kelvinwww/dsh-oauth`.
 

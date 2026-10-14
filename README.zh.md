@@ -2,9 +2,9 @@
 
 [English](README.md) | 中文
 
-DSH 0.2.0-rc.2 配套版本为本地 bundle 0.2.8。模型与工具偏好使用官方 storage domain，首次导入旧 settings 文档，保留原文件；PTC 图片补充上下文由官方工具调度器统一生成，Responses 原生压缩使用 pi-ai 的规范化 transcript。
+DSH 0.2.0-rc.2 配套版本为本地 bundle 0.2.9。模型与工具偏好使用官方 storage domain，首次导入旧 settings 文档，保留原文件；PTC 图片补充上下文由官方工具调度器统一生成，Responses 原生压缩使用 pi-ai 的规范化 transcript。
 
-该版本独立锁定 pi-ai 1.2.0，使用上游目录中的 GPT-6.1 Sol；DSH 自带的适配器依赖保持其兼容版本。图片发现改用统一模型目录，路由别名同时保留聊天与图片模型的身份。同源认证接口 `GET /plugins/dsh-openai-codex/components` 返回运行中 bundle/依赖版本和静态模型 ID，用于部署核对。
+该版本独立锁定 pi-ai 1.2.0，使用上游目录中的 GPT-6.1 Sol；DSH 自带的适配器依赖保持其兼容版本。图片发现改用统一模型目录，路由别名同时保留聊天与图片模型的身份。同源认证接口 `GET /plugins/dsh-openai-codex/components` 返回运行中 bundle/依赖版本、静态模型 ID 和持久化设置就绪状态，用于部署核对。设置消费者同时声明存储 hub 和 domain 服务，修复真实 Host 环境中模型、图片与出口偏好无法保存的问题。
 
 在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 中连接订阅 Provider，无需修改 DSH。bundle 包含 pi-ai 的 OpenAI Codex、xAI，以及来自 `@kelvinwww/dsh-oauth` 的 Google Code Assist OAuth。
 
