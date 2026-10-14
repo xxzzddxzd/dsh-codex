@@ -21,6 +21,7 @@ import type { OpenAICodexService } from './service.ts'
 import { MANAGED_PROVIDERS } from './provider-ids.ts'
 import type { ManagedProvider } from './provider-ids.ts'
 import { XAI_IMAGE_MODELS } from './xai-images.ts'
+import { describeProviderComponents } from './components.ts'
 
 /** Plugin-owned status endpoint consumed by its browser half. */
 export const OPENAI_CODEX_AUTH_STATUS_PATH = '/plugins/dsh-openai-codex/auth/status'
@@ -339,6 +340,15 @@ export function registerOpenAICodexAuthRoutes(
   const xaiAuth = new XaiWebAuth(service.xaiCredentials)
   ctx.effect(() => {
     const routes = [
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/plugins/dsh-openai-codex/components',
+        handler: (req, res) => {
+          if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
+          if (req.method !== 'GET') return json(res, 405, { error: 'method not allowed' })
+          json(res, 200, describeProviderComponents())
+        },
+      }),
       ...MANAGED_PROVIDERS.map(provider => ctx.webServer.register({
         kind: 'exact' as const,
         path: `/plugins/dsh-openai-codex/providers/${provider}/models`,

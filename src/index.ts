@@ -6,6 +6,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-codex'
+export { describeProviderComponents } from './components.ts'
 import { xaiProvider } from '@earendil-works/pi-ai/providers/xai'
 import { ConfigurableProviderAdapter } from './model-preferences.ts'
 import { randomUUID } from 'node:crypto'

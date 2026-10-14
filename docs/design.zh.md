@@ -28,7 +28,7 @@ bundle 使用公开的 `PiAiAdapter` 以及随附的 Codex Provider 和模型目
 
 原生压缩模式在 `GenerateOptions.purpose === 'compaction'` 时去掉 `dsh-compaction-basic` 追加的私有摘要指令，按 Codex V2 流程通过普通 `codex/responses` 流发送请求：在历史末尾追加 `compaction_trigger`，并接收唯一的加密 `compaction` 输出 item。近期客户端消息和该输出会以插件标记封装成文本，让现有 compaction 事务继续负责范围校验、事件和表层替换。普通 Codex 请求构建完成后，adapter 会把该标记替换回原生 items；这项还原不依赖开关当前是否开启，因此检查点可以跨重启并在关闭实验后继续使用。V2 请求失败会在 provider 事件对外发出前切换到普通 SSE 摘要请求，并带上完整的 Harness 压缩提示词。
 
-pi-ai 0.87.1 将系统指令与工具声明放入 transcript。压缩请求先规范化保留的 transcript，再从这些消息解析当前工具与系统指令。
+pi-ai 1.2.0 将系统指令与工具声明放入 transcript。压缩请求先规范化保留的 transcript，再从这些消息解析当前工具与系统指令。
 
 ChatGPT Codex 路由不会执行普通 Responses 的输出 token 上限。压缩仍使用模型目录中的上下文容量与标准检查点替换，但配置的摘要 token 上限无法在此路由由服务端强制执行。
 
@@ -42,7 +42,7 @@ DSH 0.2.0 的 PTC 调度器负责把图片结果补入模型上下文；两种�
 
 移除独立工具后，早期会话中的 `view_image` 结果仍可读取。Harness 会直接重放持久化的 `tool/result` 消息和附件引用，不要求当前工具注册表仍包含历史名称。模型若再次发起新的 `view_image` 调用，会收到普通的未知工具结果，并可改用 `read_image` 重试。
 
-`imagegen` 按当前会话 Provider 分流：OpenAI Codex 使用 `gpt-image-2`，xAI 使用锁定的 pi-ai 0.87.1 目录中所选的 Grok Imagine 2.0 或 Quality。调用方仍须声明图片输入能力，因为结果包含供下一轮使用的图片块。Codex 最多接受五张参考图，xAI 最多三张；工作区路径使用 `ctx.fs`，会话参考图使用附件存储，base64 data URL 只存在于私有 Provider 请求中。
+`imagegen` 按当前会话 Provider 分流：OpenAI Codex 使用 `gpt-image-2`，xAI 使用锁定的 pi-ai 1.2.0 目录中所选的 Grok Imagine 2.0 或 Quality。调用方仍须声明图片输入能力，因为结果包含供下一轮使用的图片块。Codex 最多接受五张参考图，xAI 最多三张；工作区路径使用 `ctx.fs`，会话参考图使用附件存储，base64 data URL 只存在于私有 Provider 请求中。
 
 每张生成的受支持图片都会保存为附件并写入当前工作区。省略 `output_path` 时，插件会按检测到的 PNG、JPEG、WebP 或 GIF 扩展名创建防冲突文件名。插件为 `imagegen` 注册了专用工具视图，通过所属会话读取持久附件，在对话中直接显示缩略图并支持查看原图。已发布的 dsh 版本尚未公开二进制写入原语，因此插件包含本地原子写入兼容层；它只处理 `file:` 目标，并在写入前执行当前沙箱策略。非文件执行世界必须提供 `writeBytes`；`dsh-remote-ssh` 已实现该方法，并且只在 AHP 传输内部把字节编码为 base64。远程目标绝不回退到宿主路径。如果沙箱策略或文件系统能力拒绝写入，附件仍然可用，工具结果会报告保存失败。
 

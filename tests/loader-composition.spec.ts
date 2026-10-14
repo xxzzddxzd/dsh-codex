@@ -83,6 +83,11 @@ describe('OpenAI Codex real composition', () => {
     const models = await ctx.llm.listModels(OpenAICodex.OPENAI_CODEX_PROVIDER)
     expect(models.some(model => model.id === 'gpt-5.6-sol')).toBe(true)
     expect(models).toContainEqual(expect.objectContaining({
+      id: 'gpt-6.1-sol',
+      name: 'GPT-6.1 Sol',
+      provider: OpenAICodex.OPENAI_CODEX_PROVIDER,
+    }))
+    expect(models).toContainEqual(expect.objectContaining({
       id: 'gpt-6-astra',
       name: 'GPT-6 Astra',
       provider: OpenAICodex.OPENAI_CODEX_PROVIDER,

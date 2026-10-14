@@ -1,6 +1,6 @@
 /** xAI image models exposed by the pinned current pi-ai catalog. */
 
-import { getImageModels } from '@earendil-works/pi-ai/compat'
+import { openrouterProvider } from '@earendil-works/pi-ai/providers/openrouter'
 
 export const XAI_IMAGE_MODELS = [
   'grok-imagine-image-2.0',
@@ -13,7 +13,8 @@ export const DEFAULT_XAI_IMAGE_MODEL: XaiImageModel = 'grok-imagine-image-2.0'
 
 /** Fail closed if the pinned pi catalog and the settings surface drift apart. */
 export function assertCurrentPiXaiImageCatalog(): void {
-  const actual = getImageModels('openrouter')
+  const actual = (openrouterProvider().getAllModels?.() ?? [])
+    .filter(model => model.type === 'image')
     .map(model => model.id)
     .filter(id => id.startsWith('x-ai/'))
     .map(id => id.slice('x-ai/'.length))

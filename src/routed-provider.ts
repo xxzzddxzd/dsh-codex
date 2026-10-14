@@ -23,5 +23,8 @@ export function routedProvider(provider: Provider, route: string, name: string):
     id: route,
     name,
     getModels: routedModels,
+    ...provider.getAllModels === undefined ? {} : {
+      getAllModels: () => provider.getAllModels!().map(model => ({ ...model, provider: route })),
+    },
   }
 }
