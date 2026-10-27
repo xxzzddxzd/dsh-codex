@@ -2,9 +2,11 @@
 
 English | [中文](README.zh.md)
 
-Local bundle 0.2.10 targets DSH 0.2.1-rc.2. Provider preferences use the official storage domain and import either legacy settings filename once. The Harness PTC scheduler owns deferred image context; native Responses compaction reads the normalized pi-ai transcript.
+Local bundle 0.2.11 targets DSH 0.2.1-rc.2. Provider preferences use the official storage domain and import either legacy settings filename once. The Harness PTC scheduler owns deferred image context; native Responses compaction reads the normalized pi-ai transcript.
 
 The bundle pins pi-ai 1.4.0 and exposes GPT-6.1 Sol from its upstream catalog. DSH's adapter keeps its own pi-ai 1.3.0 dependency; the plugin crosses that public boundary with static providers. Image discovery uses the unified model catalog, and route aliases preserve chat and image model identities. The authenticated, same-origin `GET /plugins/dsh-openai-codex/components` endpoint reports the loaded bundle/dependency versions, static model IDs, and durable-settings readiness for deployment checks. The settings consumer declares both storage services so model, image, and routing preferences can save in the real Host composition.
+
+Paired native gateways can manage the same Provider settings through Connection's owner-only `POST /api/dsh-provider-settings` API. The Web and native surfaces share login lifecycle owners, model/image/Responses preferences and VLESS routing. Requests use a fixed action list and a 16 KiB body cap; credentials remain with the Host. The optional Connection peer preserves headless profiles. See the [native API contract](docs/native-panel.md).
 
 This catalog retires `gpt-5.3-codex-spark` and `gpt-5.5`; existing history remains readable, but a new request still targeting a retired model must select an available model. The plugin pins zod 4.4.3 to match the DSH storage-domain API, preserving strict schema typing without cross-version recursive expansion. The empty invariant companion is removed with the retired DSH invariant API.
 

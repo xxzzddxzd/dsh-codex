@@ -22,6 +22,7 @@ import { MANAGED_PROVIDERS } from './provider-ids.ts'
 import type { ManagedProvider } from './provider-ids.ts'
 import { XAI_IMAGE_MODELS } from './xai-images.ts'
 import { describeProviderComponents } from './components.ts'
+import { registerNativeProviderPanel } from './native-panel.ts'
 
 /** Plugin-owned status endpoint consumed by its browser half. */
 export const OPENAI_CODEX_AUTH_STATUS_PATH = '/plugins/dsh-openai-codex/auth/status'
@@ -338,6 +339,7 @@ export function registerOpenAICodexAuthRoutes(
 ): void {
   const auth = new OpenAICodexWebAuth(store)
   const xaiAuth = new XaiWebAuth(service.xaiCredentials)
+  registerNativeProviderPanel(ctx, { service, codexAuth: auth, xaiAuth })
   ctx.effect(() => {
     const routes = [
       ctx.webServer.register({

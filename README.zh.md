@@ -2,9 +2,11 @@
 
 [English](README.md) | 中文
 
-DSH 0.2.1-rc.2 配套版本为本地 bundle 0.2.10。模型与工具偏好使用官方 storage domain，首次导入旧 settings 文档，保留原文件；PTC 图片补充上下文由官方工具调度器统一生成，Responses 原生压缩使用 pi-ai 的规范化 transcript。
+DSH 0.2.1-rc.2 配套版本为本地 bundle 0.2.11。模型与工具偏好使用官方 storage domain，首次导入旧 settings 文档，保留原文件；PTC 图片补充上下文由官方工具调度器统一生成，Responses 原生压缩使用 pi-ai 的规范化 transcript。
 
 该版本独立锁定 pi-ai 1.4.0，使用上游目录中的 GPT-6.1 Sol；DSH 自带适配器保留自己的 pi-ai 1.3.0 依赖，插件只通过静态 Provider 的公开接口跨过版本边界。图片发现使用统一模型目录，路由别名同时保留聊天与图片模型的身份。同源认证接口 `GET /plugins/dsh-openai-codex/components` 返回运行中 bundle/依赖版本、静态模型 ID 和持久化设置就绪状态，用于部署核对。设置消费者同时声明存储 hub 和 domain 服务，保证真实 Host 环境中模型、图片与出口偏好能够保存。
+
+已配对原生网关可通过 Connection 的 owner 专用接口 `POST /api/dsh-provider-settings` 管理同一份 Provider 配置。Web 与原生共用登录生命周期、模型/图片/Responses 偏好和 VLESS 分流；接口限定操作名及 16 KiB 请求体，凭据仍由后台保存。Connection peer 为可选依赖，保留无界面 profile。详见[原生接口契约](docs/native-panel.md)。
 
 本目录移除 `gpt-5.3-codex-spark` 和 `gpt-5.5`；历史仍可读取，但继续请求已退役模型时需选择当前可用模型。插件的 zod 固定为与 DSH storage-domain API 一致的 4.4.3，保留严格 schema 类型检查，避免跨版本类型递归展开。空的 invariant companion 随 DSH 已退役接口一并删除。
 
