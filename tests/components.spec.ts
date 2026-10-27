@@ -7,10 +7,12 @@ import { assertCurrentPiXaiImageCatalog } from '../src/xai-images.ts'
 describe('Provider components and unified model catalogs', () => {
   it('reports the resolved pi-ai version and GPT-6.1 Sol from the actual catalog', () => {
     const info = describeProviderComponents()
-    expect(info.bundle.version).toBe('0.2.9')
-    expect(info.piAi.version).toBe('1.2.0')
+    expect(info.bundle.version).toBe('0.2.10')
+    expect(info.piAi.version).toBe('1.4.0')
     expect(info.piAi.version).toBe(info.piAi.declaredVersion)
     expect(info.catalogs['provider-codex']).toContain('gpt-6.1-sol')
+    expect(info.catalogs['provider-codex']).not.toContain('gpt-5.3-codex-spark')
+    expect(info.catalogs['provider-codex']).not.toContain('gpt-5.5')
   })
   it('keeps unified image and chat model identities under the aliased route', () => {
     const routed = routedProvider(openrouterProvider(), 'test-router', 'Test')

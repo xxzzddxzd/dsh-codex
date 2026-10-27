@@ -11,6 +11,7 @@ import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as OpenAICodex from '../src/index.ts'
 import { enhancedReadImageTool } from '../src/read-image-enhancement.ts'
+import { registerTextOnlyProvider, TEXT_ONLY_MODEL, TEXT_ONLY_PROVIDER } from './text-only-provider.ts'
 
 const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64')
 const signal = new AbortController().signal
@@ -129,13 +130,14 @@ async function readImage(
   context: Context,
   arguments_: { file_path?: string; url?: string },
   model = 'gpt-5.6-sol',
+  provider = OpenAICodex.OPENAI_CODEX_PROVIDER,
 ) {
   return context.tools.execute({
     signal,
     callId: ToolCallId(`read-image-${++callCounter}`),
     name: OpenAICodex.READ_IMAGE_TOOL_NAME,
     arguments: arguments_,
-    agent: agentOn(model) as never,
+    agent: agentOn(model, provider) as never,
   })
 }
 
@@ -192,8 +194,9 @@ describe('read_image enhancement', () => {
 
   it('refuses a URL result for a model without declared image input', async () => {
     const context = await setup()
+    registerTextOnlyProvider(context)
 
-    const result = await readImage(context, { url: 'https://images.example/pixel' }, 'gpt-5.3-codex-spark')
+    const result = await readImage(context, { url: 'https://images.example/pixel' }, TEXT_ONLY_MODEL, TEXT_ONLY_PROVIDER)
 
     expect(result.isError).toBe(true)
     expect(result.content.find(block => block.type === 'text')?.text).toContain('does not declare image input')

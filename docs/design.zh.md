@@ -10,13 +10,13 @@ Status: implemented
 
 ## 认证
 
-插件把 OAuth 端点、PKCE／device code 行为、account id 提取、token 刷新和 Codex 请求认证交给 dsh 基础 bundle 提供的 pi-ai Codex provider。用户可以从插件的设置页面或 `dsh-openai-codex` 可执行文件启动同一套登录生命周期。Web 认证路由只接受回环地址的同源请求，返回 `no-store` JSON，且绝不暴露 token。账号页面会在不发送模型请求的情况下读取固定的 ChatGPT Codex usage 端点，把服务端用量转换为剩余百分比进度条；只有响应包含 credit 或 workspace limit 数值时才显示精确额度。
+插件把 OAuth 端点、PKCE／device code 行为、account id 提取、token 刷新和 Codex 请求认证交给自己锁定的 pi-ai Codex provider。用户可以从插件的设置页面或 `dsh-openai-codex` 可执行文件启动同一套登录生命周期。Web 认证路由只接受回环地址的同源请求，返回 `no-store` JSON，且绝不暴露 token。账号页面会在不发送模型请求的情况下读取固定的 ChatGPT Codex usage 端点，把服务端用量转换为剩余百分比进度条；只有响应包含 credit 或 workspace limit 数值时才显示精确额度。
 
 凭据以带版本的 JSON 文档存储在 `$DSH_HOME/.openai-codex-auth.json`。文件采用原子写入，跨进程锁覆盖登录、刷新和登出。该存储有意与 `~/.codex/auth.json` 分离；如果两个独立写入的客户端共享会轮换的 refresh token，其中任一方都可能使另一方的凭据失效。
 
 ## 偏好设置
 
-DSH 0.2.0 使用 `storage.domain`：`dsh_codex_provider_models` 保存模型显示与容量，`dsh_codex_openai_codex` 保存图片与 Responses 策略。各 domain 校验 `preferences/current` 行，并通过官方 table API 串行更新，持久化提交后再通知实时消费者。首次打开时将默认值与 `settings.yaml` 或 `settings.yaml.imported` 中对应的旧命名空间合并，保留原文档；后续启动直接读取 domain 行。
+DSH 0.2.1 使用 `storage.domain`：`dsh_codex_provider_models` 保存模型显示与容量，`dsh_codex_openai_codex` 保存图片与 Responses 策略。各 domain 校验 `preferences/current` 行，并通过官方 table API 串行更新，持久化提交后再通知实时消费者。首次打开时将默认值与 `settings.yaml` 或 `settings.yaml.imported` 中对应的旧命名空间合并，保留原文档；后续启动直接读取 domain 行。
 
 ## 模型适配器与压缩
 
@@ -28,7 +28,7 @@ bundle 使用公开的 `PiAiAdapter` 以及随附的 Codex Provider 和模型目
 
 原生压缩模式在 `GenerateOptions.purpose === 'compaction'` 时去掉 `dsh-compaction-basic` 追加的私有摘要指令，按 Codex V2 流程通过普通 `codex/responses` 流发送请求：在历史末尾追加 `compaction_trigger`，并接收唯一的加密 `compaction` 输出 item。近期客户端消息和该输出会以插件标记封装成文本，让现有 compaction 事务继续负责范围校验、事件和表层替换。普通 Codex 请求构建完成后，adapter 会把该标记替换回原生 items；这项还原不依赖开关当前是否开启，因此检查点可以跨重启并在关闭实验后继续使用。V2 请求失败会在 provider 事件对外发出前切换到普通 SSE 摘要请求，并带上完整的 Harness 压缩提示词。
 
-pi-ai 1.2.0 将系统指令与工具声明放入 transcript。压缩请求先规范化保留的 transcript，再从这些消息解析当前工具与系统指令。
+pi-ai 1.4.0 将系统指令与工具声明放入 transcript。压缩请求先规范化保留的 transcript，再从这些消息解析当前工具与系统指令。
 
 ChatGPT Codex 路由不会执行普通 Responses 的输出 token 上限。压缩仍使用模型目录中的上下文容量与标准检查点替换，但配置的摘要 token 上限无法在此路由由服务端强制执行。
 
@@ -38,11 +38,11 @@ Codex 模型从 provider 目录继承其声明的输入模态。现有 dsh Web �
 
 开关启用时，插件会在 agent scope 注册一个定义，覆盖 Harness 现有的 `read_image`。它保留 `file_path`，并在 Schema 中增加与之互斥的 `url` 输入。本地调用委托给原定义，继续沿用其文件系统提供方、沙箱策略、观察事件、校验和远程工作区行为。URL 调用拒绝内嵌凭据，限制重定向次数与下载字节数，响应取消，通过签名识别 PNG、JPEG、WebP 与 GIF，并先经附件服务保存再返回图片块。实际路由的模型必须声明图片输入能力。
 
-DSH 0.2.0 的 PTC 调度器负责把图片结果补入模型上下文；两种图片工具通过该调度器返回内容，避免重复加入上下文。
+DSH 0.2.1 的 PTC 调度器负责把图片结果补入模型上下文；两种图片工具通过该调度器返回内容，避免重复加入上下文。
 
 移除独立工具后，早期会话中的 `view_image` 结果仍可读取。Harness 会直接重放持久化的 `tool/result` 消息和附件引用，不要求当前工具注册表仍包含历史名称。模型若再次发起新的 `view_image` 调用，会收到普通的未知工具结果，并可改用 `read_image` 重试。
 
-`imagegen` 按当前会话 Provider 分流：OpenAI Codex 使用 `gpt-image-2`，xAI 使用锁定的 pi-ai 1.2.0 目录中所选的 Grok Imagine 2.0 或 Quality。调用方仍须声明图片输入能力，因为结果包含供下一轮使用的图片块。Codex 最多接受五张参考图，xAI 最多三张；工作区路径使用 `ctx.fs`，会话参考图使用附件存储，base64 data URL 只存在于私有 Provider 请求中。
+`imagegen` 按当前会话 Provider 分流：OpenAI Codex 使用 `gpt-image-2`，xAI 使用锁定的 pi-ai 1.4.0 目录中所选的 Grok Imagine 2.0 或 Quality。调用方仍须声明图片输入能力，因为结果包含供下一轮使用的图片块。Codex 最多接受五张参考图，xAI 最多三张；工作区路径使用 `ctx.fs`，会话参考图使用附件存储，base64 data URL 只存在于私有 Provider 请求中。
 
 每张生成的受支持图片都会保存为附件并写入当前工作区。省略 `output_path` 时，插件会按检测到的 PNG、JPEG、WebP 或 GIF 扩展名创建防冲突文件名。插件为 `imagegen` 注册了专用工具视图，通过所属会话读取持久附件，在对话中直接显示缩略图并支持查看原图。已发布的 dsh 版本尚未公开二进制写入原语，因此插件包含本地原子写入兼容层；它只处理 `file:` 目标，并在写入前执行当前沙箱策略。非文件执行世界必须提供 `writeBytes`；`dsh-remote-ssh` 已实现该方法，并且只在 AHP 传输内部把字节编码为 base64。远程目标绝不回退到宿主路径。如果沙箱策略或文件系统能力拒绝写入，附件仍然可用，工具结果会报告保存失败。
 

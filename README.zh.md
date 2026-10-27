@@ -2,16 +2,18 @@
 
 [English](README.md) | 中文
 
-DSH 0.2.0-rc.2 配套版本为本地 bundle 0.2.9。模型与工具偏好使用官方 storage domain，首次导入旧 settings 文档，保留原文件；PTC 图片补充上下文由官方工具调度器统一生成，Responses 原生压缩使用 pi-ai 的规范化 transcript。
+DSH 0.2.1-rc.2 配套版本为本地 bundle 0.2.10。模型与工具偏好使用官方 storage domain，首次导入旧 settings 文档，保留原文件；PTC 图片补充上下文由官方工具调度器统一生成，Responses 原生压缩使用 pi-ai 的规范化 transcript。
 
-该版本独立锁定 pi-ai 1.2.0，使用上游目录中的 GPT-6.1 Sol；DSH 自带的适配器依赖保持其兼容版本。图片发现改用统一模型目录，路由别名同时保留聊天与图片模型的身份。同源认证接口 `GET /plugins/dsh-openai-codex/components` 返回运行中 bundle/依赖版本、静态模型 ID 和持久化设置就绪状态，用于部署核对。设置消费者同时声明存储 hub 和 domain 服务，修复真实 Host 环境中模型、图片与出口偏好无法保存的问题。
+该版本独立锁定 pi-ai 1.4.0，使用上游目录中的 GPT-6.1 Sol；DSH 自带适配器保留自己的 pi-ai 1.3.0 依赖，插件只通过静态 Provider 的公开接口跨过版本边界。图片发现使用统一模型目录，路由别名同时保留聊天与图片模型的身份。同源认证接口 `GET /plugins/dsh-openai-codex/components` 返回运行中 bundle/依赖版本、静态模型 ID 和持久化设置就绪状态，用于部署核对。设置消费者同时声明存储 hub 和 domain 服务，保证真实 Host 环境中模型、图片与出口偏好能够保存。
+
+本目录移除 `gpt-5.3-codex-spark` 和 `gpt-5.5`；历史仍可读取，但继续请求已退役模型时需选择当前可用模型。插件的 zod 固定为与 DSH storage-domain API 一致的 4.4.3，保留严格 schema 类型检查，避免跨版本类型递归展开。空的 invariant companion 随 DSH 已退役接口一并删除。
 
 在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 中连接订阅 Provider，无需修改 DSH。bundle 包含 pi-ai 的 OpenAI Codex、xAI，以及来自 `@kelvinwww/dsh-oauth` 的 Google Code Assist OAuth。
 
 `dsh-codex` 是一个独立的 dsh bundle，提供：
 
 - 在 dsh 设置面板或独立 CLI 中完成 ChatGPT OAuth 登录，并自动刷新 token
-- 通过 pi-ai 1.2.0 使用 OpenAI Codex OAuth 与模型目录（含 GPT-6.1 Sol 与 GPT-6 Astra）
+- 通过 pi-ai 1.4.0 使用 OpenAI Codex OAuth 与模型目录（含 GPT-6.1 Sol 与 GPT-6 Astra）
 - 通过同一版 pi-ai 原生 OAuth 使用 SuperGrok/X Premium 与 xAI 模型目录（含 Grok 4.6）
 - 通过 `@kelvinwww/dsh-oauth` 使用 Google OAuth 与 Gemini Code Assist
 - Codex GPT 模型目录；账号提供视觉模型时自动声明其图片输入能力
@@ -129,7 +131,7 @@ dsh 登录与 Codex CLI／Desktop 相互独立：
 - ChatGPT 套餐资格、模型权限、配额及后端行为由 OpenAI 控制，可能发生变化。
 - Codex 端点不执行普通 Responses 的 `max_output_tokens` 字段。压缩可以工作，但该路由无法在服务端落实配置的摘要上限。
 - 文件系统、shell、skills、MCP、subagents、权限、附件、压缩和 `web_search` 工具本身仍来自当前 dsh profile。
-- bundle 锁定 pi-ai `1.2.0`，OpenAI Codex、xAI 对话与图片设置严格采用该版本目录。
+- bundle 锁定 pi-ai `1.4.0`，OpenAI Codex、xAI 对话与图片设置严格采用该版本目录。
 - 独立搜索端点不是公开的 OpenAI Platform API；兼容性取决于固定版本的 Codex／pi-ai 实现。
 
 协议、持久化与生命周期细节见[设计文档](docs/design.zh.md)。

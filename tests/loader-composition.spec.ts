@@ -23,12 +23,14 @@ afterEach(async () => {
   if (root !== undefined) await rm(root, { recursive: true, force: true })
   root = undefined
   vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
 })
 
 describe('OpenAI Codex real composition', () => {
   it('loads through the Loader, exposes the catalog, and unregisters on disposal', async () => {
     root = await mkdtemp(join(tmpdir(), 'dsh-openai-codex-loader-'))
     vi.stubEnv('DSH_HOME', root)
+    vi.stubGlobal('fetch', vi.fn(() => { throw new Error('Unexpected external request in the Loader composition test') }))
     const configPath = join(root, 'cordis.yml')
     await writeFile(configPath, [
       '- id: llm',
@@ -85,7 +87,8 @@ describe('OpenAI Codex real composition', () => {
       type: 'oauth' as const,
       access: 'access-token',
       refresh: 'refresh-token',
-      expires: Date.now() + 60_000,
+      // pi-ai refreshes OAuth tokens inside the five-minute validity window.
+      expires: Date.now() + 3_600_000,
     }
     await ctx.openAICodex.credentials.modify(
       OpenAICodex.OPENAI_CODEX_PROVIDER,

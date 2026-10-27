@@ -2,16 +2,18 @@
 
 English | [中文](README.zh.md)
 
-Local bundle 0.2.9 targets DSH 0.2.0-rc.2. Provider preferences use the official storage domain and import either legacy settings filename once. The Harness PTC scheduler owns deferred image context; native Responses compaction reads the normalized pi-ai transcript.
+Local bundle 0.2.10 targets DSH 0.2.1-rc.2. Provider preferences use the official storage domain and import either legacy settings filename once. The Harness PTC scheduler owns deferred image context; native Responses compaction reads the normalized pi-ai transcript.
 
-The bundle pins pi-ai 1.2.0 and exposes GPT-6.1 Sol from its upstream catalog. DSH's own adapter dependency remains on its compatible version. Image discovery uses the unified model catalog, and route aliases preserve chat and image model identities. The authenticated, same-origin `GET /plugins/dsh-openai-codex/components` endpoint reports the loaded bundle/dependency versions, static model IDs, and durable-settings readiness for deployment checks. The settings consumer declares both storage services so model, image, and routing preferences can save in the real Host composition.
+The bundle pins pi-ai 1.4.0 and exposes GPT-6.1 Sol from its upstream catalog. DSH's adapter keeps its own pi-ai 1.3.0 dependency; the plugin crosses that public boundary with static providers. Image discovery uses the unified model catalog, and route aliases preserve chat and image model identities. The authenticated, same-origin `GET /plugins/dsh-openai-codex/components` endpoint reports the loaded bundle/dependency versions, static model IDs, and durable-settings readiness for deployment checks. The settings consumer declares both storage services so model, image, and routing preferences can save in the real Host composition.
+
+This catalog retires `gpt-5.3-codex-spark` and `gpt-5.5`; existing history remains readable, but a new request still targeting a retired model must select an available model. The plugin pins zod 4.4.3 to match the DSH storage-domain API, preserving strict schema typing without cross-version recursive expansion. The empty invariant companion is removed with the retired DSH invariant API.
 
 Connect subscription providers to [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) without patching DSH. The bundle includes pi-ai's OpenAI Codex and xAI providers plus the Google Code Assist OAuth implementation from `@kelvinwww/dsh-oauth`.
 
 `dsh-codex` is an independent dsh bundle. It adds:
 
 - ChatGPT OAuth from the dsh Settings panel or a standalone CLI, with automatic token refresh
-- OpenAI Codex OAuth with the pi-ai 1.2.0 catalog, including GPT-6.1 Sol and GPT-6 Astra
+- OpenAI Codex OAuth with the pi-ai 1.4.0 catalog, including GPT-6.1 Sol and GPT-6 Astra
 - SuperGrok/X Premium OAuth and the same pi-ai catalog, including Grok 4.6
 - Google OAuth and Gemini Code Assist through `@kelvinwww/dsh-oauth`
 - the Codex GPT catalog, including vision-capable models when the account offers them
@@ -131,7 +133,7 @@ Keeping the stores separate prevents two clients from racing the same rotating r
 - ChatGPT plan eligibility, model access, quotas, and backend behavior are controlled by OpenAI and may change.
 - The Codex endpoint does not enforce the ordinary Responses `max_output_tokens` field. Compaction works, but its configured summary cap cannot be imposed server-side on this route.
 - Filesystem, shell, skills, MCP, subagents, permissions, attachments, compaction, and the `web_search` tool itself still come from the active dsh profile.
-- The bundle pins pi-ai `1.2.0`; its OpenAI Codex, xAI chat, and image settings follow that exact catalog.
+- The bundle pins pi-ai `1.4.0`; its OpenAI Codex, xAI chat, and image settings follow that exact catalog.
 - The standalone search endpoint is not a public OpenAI Platform API. Compatibility follows the pinned Codex/pi-ai implementation.
 
 See [the design document](docs/design.md) for protocol, persistence, and lifecycle details.

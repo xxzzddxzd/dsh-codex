@@ -45,6 +45,8 @@ export class ProviderPreferencesScope<T extends object> {
   ) {}
 
   static async open<T extends object>(ctx: Context, namespace: string, schema: Schema<T>, base: T) {
+    // Keep the direct zod pin aligned with dsh-storage-domain's schema boundary.
+    // Different minors expand recursively when domainTable compares Zod internals.
     // Schemastery resolves synchronously; zod's Awaited<T> transform type also permits async parsers.
     const valueSchema = z.unknown().transform(value => schema(value as T)) as ZodType<T>
     const spec = defineDomain({

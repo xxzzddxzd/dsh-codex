@@ -14,6 +14,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as OpenAICodex from '../src/index.ts'
+import { registerTextOnlyProvider, TEXT_ONLY_MODEL, TEXT_ONLY_PROVIDER } from './text-only-provider.ts'
 
 const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64')
 const signal = new AbortController().signal
@@ -237,10 +238,11 @@ describe('imagegen', () => {
 
   it('refuses a text-only caller before generated image bytes enter its history', async () => {
     const ctx = await setup()
+    registerTextOnlyProvider(ctx)
     const fetchMock = successfulFetch()
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await generate(ctx, { prompt: 'A tiny pixel' }, [], 'gpt-5.3-codex-spark')
+    const result = await generate(ctx, { prompt: 'A tiny pixel' }, [], TEXT_ONLY_MODEL, TEXT_ONLY_PROVIDER)
 
     expect(result.isError).toBe(true)
     expect(result.content.find(block => block.type === 'text')?.text).toContain('does not declare image input')

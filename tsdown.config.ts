@@ -13,7 +13,6 @@ export default [
   {
     entry: {
       index: 'src/index.ts',
-      invariant: 'src/invariant.ts',
       tui: 'src/tui.ts',
       bin: 'src/bin.ts',
     },
@@ -37,7 +36,6 @@ export default [
         '@deepseek-ai/dsh-commands',
         '@deepseek-ai/dsh-fs',
         '@deepseek-ai/dsh-host-webserver',
-        '@deepseek-ai/dsh-invariants',
         '@deepseek-ai/dsh-llm',
         '@deepseek-ai/dsh-llm-pi-ai',
         '@deepseek-ai/dsh-session',
