@@ -8,6 +8,7 @@ import { GOOGLE_OAUTH_PROVIDER, MANAGED_PROVIDERS, OPENAI_CODEX_PROVIDER, XAI_PR
 import { executeProviderSettings, handleProviderSettingsRequest, PROVIDER_SETTINGS_ACTIONS, providerSettingsError } from '../src/native-panel.ts'
 import type { NativeProviderDependencies } from '../src/native-panel.ts'
 import { preferenceContext } from './preference-context.ts'
+import metadata from '../package.json' with { type: 'json' }
 
 let root: string
 let ctx: Context
@@ -53,7 +54,7 @@ describe('native Provider management', () => {
     const info = await call('overview')
     expect(info).toMatchObject({ ok: true, value: { settingsReady: true,
       providers: MANAGED_PROVIDERS.map(id => ({ id, features: { auth: true, models: true, egress: true } })),
-      components: { bundle: { version: '0.2.11' }, piAi: { version: '1.4.0' } },
+      components: { bundle: { version: metadata.version }, piAi: { version: '1.4.0' } },
     } })
     expect(dependencies.codexAuth.status).not.toHaveBeenCalled()
     expect(dependencies.xaiAuth.status).not.toHaveBeenCalled()

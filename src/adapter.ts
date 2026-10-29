@@ -26,6 +26,8 @@ export const OPENAI_CODEX_STREAM_IDLE_TIMEOUT_MS = 300_000
 
 /** Keep the route aligned with dsh-llm-pi-ai's documented request-image defaults. */
 const DEFAULT_MAX_REQUEST_IMAGE_BYTES = 20 * 1024 * 1024
+/** Bound xAI's base64 image payload so Harness offloads old occurrences before upload. */
+const XAI_MAX_REQUEST_IMAGE_BYTES = 8 * 1024 * 1024
 const DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET = 2048 * 2048
 const DEFAULT_REQUEST_IMAGE_MAX_BYTES = 1024 * 1024
 
@@ -168,7 +170,7 @@ export function createXaiAdapter(
     provider: XAI_PROVIDER,
     displayName: 'Provider xAI',
     streamIdleTimeoutMs: OPENAI_CODEX_STREAM_IDLE_TIMEOUT_MS,
-    maxRequestImageBytes: DEFAULT_MAX_REQUEST_IMAGE_BYTES,
+    maxRequestImageBytes: XAI_MAX_REQUEST_IMAGE_BYTES,
     requestImagePixelBudget: DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET,
     requestImageMaxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
     retryPolicy: resolveRetryPolicy(undefined, 'dsh-xai retryPolicy'),

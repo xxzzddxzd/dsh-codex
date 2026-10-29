@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-DSH 0.2.1-rc.2 配套版本为本地 bundle 0.2.11。模型与工具偏好使用官方 storage domain，首次导入旧 settings 文档，保留原文件；PTC 图片补充上下文由官方工具调度器统一生成，Responses 原生压缩使用 pi-ai 的规范化 transcript。
+DSH 0.2.1-rc.2 配套版本为本地 bundle 0.2.12。模型与工具偏好使用官方 storage domain，首次导入旧 settings 文档，保留原文件；PTC 图片补充上下文由官方工具调度器统一生成，Responses 原生压缩使用 pi-ai 的规范化 transcript。
 
 该版本独立锁定 pi-ai 1.4.0，使用上游目录中的 GPT-6.1 Sol；DSH 自带适配器保留自己的 pi-ai 1.3.0 依赖，插件只通过静态 Provider 的公开接口跨过版本边界。图片发现使用统一模型目录，路由别名同时保留聊天与图片模型的身份。同源认证接口 `GET /plugins/dsh-openai-codex/components` 返回运行中 bundle/依赖版本、静态模型 ID 和持久化设置就绪状态，用于部署核对。设置消费者同时声明存储 hub 和 domain 服务，保证真实 Host 环境中模型、图片与出口偏好能够保存。
 
@@ -150,3 +150,7 @@ pnpm run check
 ## 许可证
 
 Apache-2.0
+
+### xAI 请求图像预算
+
+xAI 请求最多保留 8 MiB 的图像 base64 数据，超出时由 Harness 原生机制将最旧的图像出现位置卸载为请求上下文占位；原始附件保留，可按需重新读取。Codex 仍使用 20 MiB。这是本地传输策略，不是 xAI 官方 API 上限，用于避免历史图像累积成大上传后反复触发空闲超时并重传同一请求。

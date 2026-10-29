@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Local bundle 0.2.11 targets DSH 0.2.1-rc.2. Provider preferences use the official storage domain and import either legacy settings filename once. The Harness PTC scheduler owns deferred image context; native Responses compaction reads the normalized pi-ai transcript.
+Local bundle 0.2.12 targets DSH 0.2.1-rc.2. Provider preferences use the official storage domain and import either legacy settings filename once. The Harness PTC scheduler owns deferred image context; native Responses compaction reads the normalized pi-ai transcript.
 
 The bundle pins pi-ai 1.4.0 and exposes GPT-6.1 Sol from its upstream catalog. DSH's adapter keeps its own pi-ai 1.3.0 dependency; the plugin crosses that public boundary with static providers. Image discovery uses the unified model catalog, and route aliases preserve chat and image model identities. The authenticated, same-origin `GET /plugins/dsh-openai-codex/components` endpoint reports the loaded bundle/dependency versions, static model IDs, and durable-settings readiness for deployment checks. The settings consumer declares both storage services so model, image, and routing preferences can save in the real Host composition.
 
@@ -152,3 +152,7 @@ The check performs strict Host and browser TypeScript checking, focused tests, a
 ## License
 
 Apache-2.0
+
+### xAI request image budget
+
+xAI requests retain at most 8 MiB of base64 image data. Harness offloads the oldest image occurrences above that budget into its existing request-context placeholders; original attachments are retained and can be read again. Codex keeps its 20 MiB budget. This is a local transport policy, not an xAI API limit. It prevents large image histories from repeatedly retrying the same upload after a stream-idle timeout on constrained network paths.
