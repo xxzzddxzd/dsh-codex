@@ -2,9 +2,9 @@
 
 [English](README.md) | 中文
 
-DSH 0.2.1-rc.2 配套版本为本地 bundle 0.2.12。模型与工具偏好使用官方 storage domain，首次导入旧 settings 文档，保留原文件；PTC 图片补充上下文由官方工具调度器统一生成，Responses 原生压缩使用 pi-ai 的规范化 transcript。
+DSH 0.2.1-rc.5 配套版本为本地 bundle 0.2.13。模型与工具偏好使用官方 storage domain，首次导入旧 settings 文档，保留原文件；PTC 图片补充上下文由官方工具调度器统一生成，Responses 原生压缩使用 pi-ai 的规范化 transcript。
 
-该版本独立锁定 pi-ai 1.4.0，使用上游目录中的 GPT-6.1 Sol；DSH 自带适配器保留自己的 pi-ai 1.3.0 依赖，插件只通过静态 Provider 的公开接口跨过版本边界。图片发现使用统一模型目录，路由别名同时保留聊天与图片模型的身份。同源认证接口 `GET /plugins/dsh-openai-codex/components` 返回运行中 bundle/依赖版本、静态模型 ID 和持久化设置就绪状态，用于部署核对。设置消费者同时声明存储 hub 和 domain 服务，保证真实 Host 环境中模型、图片与出口偏好能够保存。
+该版本独立锁定 pi-ai 1.5.0，使用上游目录中的 GPT-6.1 Sol；DSH 自带适配器保留自己的 pi-ai 依赖，插件只通过静态 Provider 的公开接口跨过版本边界。图片发现使用统一模型目录，路由别名同时保留聊天与图片模型的身份。同源认证接口 `GET /plugins/dsh-openai-codex/components` 返回运行中 bundle/依赖版本、静态模型 ID 和持久化设置就绪状态，用于部署核对。设置消费者同时声明存储 hub 和 domain 服务，保证真实 Host 环境中模型、图片与出口偏好能够保存。
 
 已配对原生网关可通过 Connection 的 owner 专用接口 `POST /api/dsh-provider-settings` 管理同一份 Provider 配置。Web 与原生共用登录生命周期、模型/图片/Responses 偏好和 VLESS 分流；接口限定操作名及 16 KiB 请求体，凭据仍由后台保存。Connection peer 为可选依赖，保留无界面 profile。详见[原生接口契约](docs/native-panel.md)。
 
@@ -15,7 +15,7 @@ DSH 0.2.1-rc.2 配套版本为本地 bundle 0.2.12。模型与工具偏好使用
 `dsh-codex` 是一个独立的 dsh bundle，提供：
 
 - 在 dsh 设置面板或独立 CLI 中完成 ChatGPT OAuth 登录，并自动刷新 token
-- 通过 pi-ai 1.4.0 使用 OpenAI Codex OAuth 与模型目录（含 GPT-6.1 Sol 与 GPT-6 Astra）
+- 通过 pi-ai 1.5.0 使用 OpenAI Codex OAuth 与模型目录（含 GPT-6.1 Sol、GPT-6.1 Terra 与 GPT-6 Astra）
 - 通过同一版 pi-ai 原生 OAuth 使用 SuperGrok/X Premium 与 xAI 模型目录（含 Grok 4.6）
 - 通过 `@kelvinwww/dsh-oauth` 使用 Google OAuth 与 Gemini Code Assist
 - Codex GPT 模型目录；账号提供视觉模型时自动声明其图片输入能力
@@ -133,7 +133,7 @@ dsh 登录与 Codex CLI／Desktop 相互独立：
 - ChatGPT 套餐资格、模型权限、配额及后端行为由 OpenAI 控制，可能发生变化。
 - Codex 端点不执行普通 Responses 的 `max_output_tokens` 字段。压缩可以工作，但该路由无法在服务端落实配置的摘要上限。
 - 文件系统、shell、skills、MCP、subagents、权限、附件、压缩和 `web_search` 工具本身仍来自当前 dsh profile。
-- bundle 锁定 pi-ai `1.4.0`，OpenAI Codex、xAI 对话与图片设置严格采用该版本目录。
+- bundle 锁定 pi-ai `1.5.0`，OpenAI Codex、xAI 对话与图片设置严格采用该版本目录。
 - 独立搜索端点不是公开的 OpenAI Platform API；兼容性取决于固定版本的 Codex／pi-ai 实现。
 
 协议、持久化与生命周期细节见[设计文档](docs/design.zh.md)。

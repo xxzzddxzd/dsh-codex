@@ -7,10 +7,11 @@ import { assertCurrentPiXaiImageCatalog } from '../src/xai-images.ts'
 describe('Provider components and unified model catalogs', () => {
   it('reports the resolved pi-ai version and GPT-6.1 Sol from the actual catalog', () => {
     const info = describeProviderComponents()
-    expect(info.bundle.version).toBe('0.2.12')
-    expect(info.piAi.version).toBe('1.4.0')
+    expect(info.bundle.version).toBe('0.2.13')
+    expect(info.piAi.version).toBe('1.5.0')
     expect(info.piAi.version).toBe(info.piAi.declaredVersion)
     expect(info.catalogs['provider-codex']).toContain('gpt-6.1-sol')
+    expect(info.catalogs['provider-codex']).toContain('gpt-6.1-terra')
     expect(info.catalogs['provider-codex']).not.toContain('gpt-5.3-codex-spark')
     expect(info.catalogs['provider-codex']).not.toContain('gpt-5.5')
   })

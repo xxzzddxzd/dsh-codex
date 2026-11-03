@@ -54,7 +54,7 @@ describe('native Provider management', () => {
     const info = await call('overview')
     expect(info).toMatchObject({ ok: true, value: { settingsReady: true,
       providers: MANAGED_PROVIDERS.map(id => ({ id, features: { auth: true, models: true, egress: true } })),
-      components: { bundle: { version: metadata.version }, piAi: { version: '1.4.0' } },
+      components: { bundle: { version: metadata.version }, piAi: { version: '1.5.0' } },
     } })
     expect(dependencies.codexAuth.status).not.toHaveBeenCalled()
     expect(dependencies.xaiAuth.status).not.toHaveBeenCalled()
