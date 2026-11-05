@@ -13,6 +13,8 @@ import {
   isXaiImageModel,
 } from './xai-images.ts'
 import type { XaiImageModel } from './xai-images.ts'
+import { CODEX_IMAGE_MODELS, DEFAULT_CODEX_IMAGE_MODEL, isCodexImageModel } from './codex-images.ts'
+import type { CodexImageModel } from './codex-images.ts'
 
 /** User-controlled image-tool integration. */
 export interface ImageToolPreferences {
@@ -40,6 +42,7 @@ interface OpenAICodexPreferences extends ImageToolPreferences, ResponseApiPrefer
   useGoogleVless: boolean
   /** xAI image model used when imagegen is called from an xAI conversation. */
   xaiImageModel: XaiImageModel
+  codexImageModel: CodexImageModel
 }
 
 /** Defaults keep generic vision-model interoperability enabled. */
@@ -71,6 +74,7 @@ const schema: z<OpenAICodexPreferences> = z.object({
   useGoogleVless: z.boolean().default(false),
   xaiImageModel: z.union(['grok-imagine-image-2.0', 'grok-imagine-image-quality'] as const)
     .default(DEFAULT_XAI_IMAGE_MODEL),
+  codexImageModel: z.union(CODEX_IMAGE_MODELS).default(DEFAULT_CODEX_IMAGE_MODEL),
 })
 
 /** Live policy shared by the host tools, Codex adapter, and settings HTTP surface. */
@@ -90,6 +94,7 @@ export class ImageToolPolicy {
       useXaiVless: false,
       useGoogleVless: false,
       xaiImageModel: DEFAULT_XAI_IMAGE_MODEL,
+      codexImageModel: DEFAULT_CODEX_IMAGE_MODEL,
       ...base,
     }
     if (this.current.useStatefulResponses && base.useWebSocketContextReuse === undefined) {
@@ -170,6 +175,19 @@ export class ImageToolPolicy {
     await this.scope.update({ xaiImageModel: model })
     this.replace(this.scope.get())
     return this.xaiImageSnapshot()
+  }
+
+  /** The subscription backend does not attest which model handled the request. */
+  codexImageSnapshot(): { model: CodexImageModel } {
+    return { model: this.current.codexImageModel }
+  }
+
+  async updateCodexImageModel(model: unknown): Promise<{ model: CodexImageModel }> {
+    if (!isCodexImageModel(model)) throw new Error('unsupported Codex image request model')
+    if (this.scope === undefined) throw new Error('Provider settings service is unavailable')
+    await this.scope.update({ codexImageModel: model })
+    this.replace(this.scope.get())
+    return this.codexImageSnapshot()
   }
 
   /** Persist a partial browser update through the settings service. */

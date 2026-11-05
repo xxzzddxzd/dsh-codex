@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-DSH 0.2.1-rc.5 配套版本为本地 bundle 0.2.13。模型与工具偏好使用官方 storage domain，首次导入旧 settings 文档，保留原文件；PTC 图片补充上下文由官方工具调度器统一生成，Responses 原生压缩使用 pi-ai 的规范化 transcript。
+DSH 0.2.1-rc.5 配套版本为本地 bundle 0.2.14。模型与工具偏好使用官方 storage domain，首次导入旧 settings 文档，保留原文件；PTC 图片补充上下文由官方工具调度器统一生成，Responses 原生压缩使用 pi-ai 的规范化 transcript。
 
 该版本独立锁定 pi-ai 1.5.0，使用上游目录中的 GPT-6.1 Sol；DSH 自带适配器保留自己的 pi-ai 依赖，插件只通过静态 Provider 的公开接口跨过版本边界。图片发现使用统一模型目录，路由别名同时保留聊天与图片模型的身份。同源认证接口 `GET /plugins/dsh-openai-codex/components` 返回运行中 bundle/依赖版本、静态模型 ID 和持久化设置就绪状态，用于部署核对。设置消费者同时声明存储 hub 和 domain 服务，保证真实 Host 环境中模型、图片与出口偏好能够保存。
 
@@ -22,7 +22,7 @@ DSH 0.2.1-rc.5 配套版本为本地 bundle 0.2.13。模型与工具偏好使用
 - 经标准 LLM 服务运行的流式响应、工具调用、推理回放、提示词缓存与 dsh 压缩
 - 通过 dsh 现有 `web_search` 工具使用 Codex 独立联网搜索
 - 为 Harness 现有 `read_image` 工具增加可选的 HTTP(S) URL 输入
-- Provider 原生 `imagegen`：Codex 使用 `gpt-image-2`，xAI 使用 Grok Imagine 2.0 / Quality
+- Provider 原生 `imagegen`：Codex 可选择请求模型，xAI 使用 Grok Imagine 2.0 / Quality
 - 复用 dsh Web 输入框的粘贴和拖放图片能力
 
 ChatGPT 订阅认证与按量计费的 OpenAI API 是不同产品。本插件只使用 ChatGPT Codex 后端，不会把订阅转换成通用 OpenAI API 凭据。
@@ -79,7 +79,9 @@ bundle 提供 `provider-codex`、`provider-xai` 和 `provider-google` 订阅路�
 - 在当前 dsh 附件限制内支持 PNG、JPEG、WebP 与 GIF；
 - 只有明确声明支持图片输入的模型才能接收图片。
 
-任何支持视觉输入的当前对话模型都可以使用 `imagegen`。Codex 会话使用 `gpt-image-2`；xAI 会话使用 **设置 → Provider → xAI** 中选择的 Grok Imagine 模型。当前 pi-ai 目录提供 Imagine Image 2.0 与 Imagine Image Quality。xAI 编辑最多支持三张参考图，Codex 最多五张。每个结果都会直接显示、保存为持久附件，并按检测到的 PNG／JPEG／WebP／GIF 扩展名写入当前工作区。
+任何支持视觉输入的当前对话模型都可以使用 `imagegen`。Codex 的请求模型可在 **设置 → Provider → Provider Codex → 图片工具 → 生图请求模型** 中选择，包括默认的 `gpt-image-2`、`gpt-image-2.6-flare` 和 `gpt-image-2.6-sunburst`。该设置只改变生成和编辑请求中发送的模型名称；订阅服务不返回实际使用的模型，因此选择某个名称不能证明该型号已经生效。生图请求模型与聊天模型选择器是两个独立设置。
+
+xAI 会话使用 **设置 → Provider → xAI** 中选择的 Grok Imagine 模型。当前 pi-ai 目录提供 Imagine Image 2.0 与 Imagine Image Quality。xAI 编辑最多支持三张参考图，Codex 最多五张。每个结果都会直接显示、保存为持久附件，并按检测到的 PNG／JPEG／WebP／GIF 扩展名写入当前工作区。
 
 设置页提供独立的 **增强 read_image** 与 **允许其他模型使用生图** 开关，默认均为开启。关闭第一项会撤销插件的 agent-scope 覆盖，恢复 Harness 原本只接受本地路径的 `read_image` Schema。关闭第二项后，Codex 视觉模型仍可使用 `imagegen`，其他模型提供方的调用会在执行入口被拒绝。
 

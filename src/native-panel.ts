@@ -7,13 +7,14 @@ import type { ManagedProvider } from './provider-ids.ts'
 import type { OpenAICodexService } from './service.ts'
 import type { ImageToolPreferences, ResponseApiPreferences } from './tool-policy.ts'
 import { XAI_IMAGE_MODELS } from './xai-images.ts'
+import { CODEX_IMAGE_MODELS } from './codex-images.ts'
 
 export const PROVIDER_SETTINGS_PATH = '/api/dsh-provider-settings'
 export const PROVIDER_SETTINGS_MAX_BODY_BYTES = 16 * 1024
 export const PROVIDER_SETTINGS_ACTIONS = [
   'overview', 'auth.status', 'auth.login', 'auth.logout',
   'models.get', 'models.set', 'images.get', 'images.set',
-  'responses.get', 'responses.set', 'xai-image.get', 'xai-image.set',
+  'responses.get', 'responses.set', 'xai-image.get', 'xai-image.set', 'codex-image.get', 'codex-image.set',
   'egress.get', 'egress.set', 'vless.get', 'vless.configure', 'vless.speed-test',
 ] as const
 export type ProviderSettingsAction = typeof PROVIDER_SETTINGS_ACTIONS[number]
@@ -125,6 +126,13 @@ export async function executeProviderSettings(
       ? await service.policy.updateXaiImageModel(payload.model)
       : service.policy.xaiImageSnapshot()
     return { ...preferences, models: imageModels() }
+  }
+  if (action === 'codex-image.get' || action === 'codex-image.set') {
+    fields(payload, action === 'codex-image.set' ? ['model'] : [])
+    const preferences = action === 'codex-image.set'
+      ? await service.policy.updateCodexImageModel(payload.model)
+      : service.policy.codexImageSnapshot()
+    return { ...preferences, models: CODEX_IMAGE_MODELS.map(id => ({ id, name: id })) }
   }
   if (action === 'egress.get' || action === 'egress.set') {
     fields(payload, action === 'egress.set' ? ['provider', 'egress'] : ['provider'])

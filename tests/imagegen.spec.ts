@@ -133,6 +133,25 @@ function successfulFetch() {
 }
 
 describe('imagegen', () => {
+  it('sends the selected requested Codex model on generation and edit without a silent fallback', async () => {
+    const fetchMock = successfulFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    const store = new OpenAICodex.OpenAICodexCredentialStore()
+    let model: 'gpt-image-2.6-flare' | 'gpt-image-2.6-sunburst' = 'gpt-image-2.6-flare'
+    const client = new OpenAICodex.OpenAICodexImageClient(store, () => model)
+    await client.generate('generate', [], signal)
+    model = 'gpt-image-2.6-sunburst'
+    await client.generate('edit', ['data:image/png;base64,AA=='], signal)
+    const first = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    const second = fetchMock.mock.calls[1] as unknown as [string, RequestInit]
+    expect(first[0]).toBe(OpenAICodex.OPENAI_CODEX_IMAGE_GENERATIONS_URL)
+    expect(JSON.parse(first[1].body as string).model).toBe('gpt-image-2.6-flare')
+    expect(second[0]).toBe(OpenAICodex.OPENAI_CODEX_IMAGE_EDITS_URL)
+    expect(JSON.parse(second[1].body as string).model).toBe('gpt-image-2.6-sunburst')
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: { message: 'not available' } }), { status: 400 })))
+    await expect(client.generate('generate', [], signal)).rejects.toThrow('not available')
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1)
+  })
   it('generates an attachment and optionally publishes the same PNG to the workspace', async () => {
     const ctx = await setup()
     const fetchMock = successfulFetch()

@@ -58,7 +58,7 @@ describe('native Provider management', () => {
     } })
     expect(dependencies.codexAuth.status).not.toHaveBeenCalled()
     expect(dependencies.xaiAuth.status).not.toHaveBeenCalled()
-    expect(PROVIDER_SETTINGS_ACTIONS).toHaveLength(17)
+    expect(PROVIDER_SETTINGS_ACTIONS).toHaveLength(19)
     expect(fetch).not.toHaveBeenCalled()
   })
 
@@ -126,9 +126,12 @@ describe('native Provider management', () => {
     expect(await call('xai-image.set', { model: 'grok-imagine-image-quality' })).toMatchObject({ ok: true,
       value: { model: 'grok-imagine-image-quality', models: expect.any(Array) } })
     expect(subject.policy.xaiImageSnapshot().model).toBe('grok-imagine-image-quality')
+    expect(await call('codex-image.set', { model: 'gpt-image-2.6-flare' })).toMatchObject({ ok: true,
+      value: { model: 'gpt-image-2.6-flare', models: expect.any(Array) } })
+    expect(subject.policy.codexImageSnapshot().model).toBe('gpt-image-2.6-flare')
     for (const [action, payload] of [
       ['images.set', { modifyReadImage: 'false' }], ['images.set', { unknown: true }],
-      ['responses.set', { useStatefulResponses: true }], ['xai-image.set', { model: 'unknown' }],
+      ['responses.set', { useStatefulResponses: true }], ['xai-image.set', { model: 'unknown' }], ['codex-image.set', { model: 'unknown' }],
     ] as const) expect(await call(action, payload)).toMatchObject({ ok: false })
   })
 

@@ -22,11 +22,13 @@ import type { ImageToolPolicy } from './tool-policy.ts'
 import type { XaiImageModel } from './xai-images.ts'
 import { xaiProvider } from '@earendil-works/pi-ai/providers/xai'
 import { routedProvider } from './routed-provider.ts'
+import { DEFAULT_CODEX_IMAGE_MODEL } from './codex-images.ts'
+import type { CodexImageModel } from './codex-images.ts'
 
 /** Stable Codex-compatible tool name. */
 export const IMAGEGEN_TOOL_NAME = 'imagegen'
 /** Image model selected by the official Codex image extension. */
-export const OPENAI_CODEX_IMAGE_MODEL = 'gpt-image-2'
+export const OPENAI_CODEX_IMAGE_MODEL = DEFAULT_CODEX_IMAGE_MODEL
 /** Standalone generation endpoint used by the official Codex client. */
 export const OPENAI_CODEX_IMAGE_GENERATIONS_URL = `${OPENAI_CODEX_BASE_URL}/images/generations`
 /** Reference-image edit endpoint used by the official Codex client. */
@@ -139,7 +141,7 @@ export class OpenAICodexImageClient {
   private readonly models: Models
 
   /** @param credentials - shared refreshable OAuth store. */
-  constructor(credentials: OpenAICodexCredentialStore) {
+  constructor(credentials: OpenAICodexCredentialStore, private readonly selectedModel: () => CodexImageModel = () => DEFAULT_CODEX_IMAGE_MODEL) {
     const models = createModels({ credentials })
     models.setProvider(routedProvider(openaiCodexProvider(), OPENAI_CODEX_PROVIDER, 'Provider Codex'))
     this.models = models
@@ -164,7 +166,7 @@ export class OpenAICodexImageClient {
       ...images.length === 0 ? {} : { images: images.map(image_url => ({ image_url })) },
       prompt,
       background: 'auto',
-      model: OPENAI_CODEX_IMAGE_MODEL,
+      model: this.selectedModel(),
       quality: 'auto',
       size: 'auto',
     }
@@ -386,11 +388,11 @@ export function imagegenTool(
   xaiCredentials: XaiCredentialStore,
   policy: ImageToolPolicy,
 ): ToolDefinition {
-  const openaiClient = new OpenAICodexImageClient(credentials)
+  const openaiClient = new OpenAICodexImageClient(credentials, () => policy.codexImageSnapshot().model)
   const xaiClient = new XaiImageClient(xaiCredentials, () => policy.xaiImageSnapshot().model)
   return defineTool({
     name: IMAGEGEN_TOOL_NAME,
-    description: 'Generate or edit an image with the active provider: gpt-image-2 for OpenAI Codex, or the selected Grok Imagine model for xAI. Omit both reference fields for a new image. Use referenced_image_paths for workspace files, or num_last_images_to_include for attached, viewed, or previously generated conversation images. Never provide both. Multiple images keep chronological/path-array order; identify them as Image 1, Image 2, and so on in the prompt. The generated image is always saved in the active local or Remote SSH workspace; output_path chooses its location, otherwise a unique generated-<timestamp>-<id> name is used.',
+    description: 'Generate or edit an image with the selected OpenAI Codex image request model or Grok Imagine model for xAI. The Codex backend does not report the actual model. Omit both reference fields for a new image. Use referenced_image_paths for workspace files, or num_last_images_to_include for attached, viewed, or previously generated conversation images. Never provide both. Multiple images keep chronological/path-array order; identify them as Image 1, Image 2, and so on in the prompt. The generated image is always saved in the active local or Remote SSH workspace; output_path chooses its location, otherwise a unique generated-<timestamp>-<id> name is used.',
     parameters: {
       prompt: { type: 'string', required: true, description: 'Complete generation or edit instruction. For multiple references, name each input by its Image N order.' },
       referenced_image_paths: { type: 'array', items: { type: 'string' }, description: 'Local or active-workspace image paths in Image 1..N order; up to five for Codex or three for xAI.' },

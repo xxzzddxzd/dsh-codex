@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Local bundle 0.2.13 targets DSH 0.2.1-rc.5. Provider preferences use the official storage domain and import either legacy settings filename once. The Harness PTC scheduler owns deferred image context; native Responses compaction reads the normalized pi-ai transcript.
+Local bundle 0.2.14 targets DSH 0.2.1-rc.5. Provider preferences use the official storage domain and import either legacy settings filename once. The Harness PTC scheduler owns deferred image context; native Responses compaction reads the normalized pi-ai transcript.
 
 The bundle pins pi-ai 1.5.0 and exposes GPT-6.1 Sol from its upstream catalog. DSH's adapter keeps its own pi-ai dependency; the plugin crosses that public boundary with static providers. Image discovery uses the unified model catalog, and route aliases preserve chat and image model identities. The authenticated, same-origin `GET /plugins/dsh-openai-codex/components` endpoint reports the loaded bundle/dependency versions, static model IDs, and durable-settings readiness for deployment checks. The settings consumer declares both storage services so model, image, and routing preferences can save in the real Host composition.
 
@@ -22,7 +22,7 @@ Connect subscription providers to [DeepSeek Harness](https://github.com/deepseek
 - streaming, tool calls, reasoning replay, prompt caching, and dsh compaction through the normal LLM service
 - Codex standalone web search through dsh's existing `web_search` tool
 - optional HTTP(S) URL input added to Harness's existing `read_image` tool
-- provider-native `imagegen`: `gpt-image-2` for Codex, or Grok Imagine 2.0 / Quality for xAI
+- provider-native `imagegen`: a configurable request model for Codex, or Grok Imagine 2.0 / Quality for xAI
 - browser image input through dsh's existing paste and drop controls
 
 ChatGPT subscription authentication and usage-based OpenAI API access are different products. This plugin uses the ChatGPT Codex backend only; it does not turn a subscription into a general-purpose OpenAI API credential.
@@ -81,7 +81,9 @@ Image support uses dsh's durable attachment path:
 - PNG, JPEG, WebP, and GIF are accepted within the active dsh attachment limits;
 - only a model that explicitly advertises image input may receive an image.
 
-`imagegen` is available to any vision-capable conversation model. Provider Codex conversations use `gpt-image-2`; Provider xAI conversations use the Grok Imagine model selected under **Settings → Provider → Provider xAI**. The current pi-ai catalog exposes Imagine Image 2.0 and Imagine Image Quality. xAI edits accept up to three references; Codex accepts up to five. Every result is shown inline, saved as a durable attachment, and written to the active workspace with its detected PNG/JPEG/WebP/GIF extension.
+`imagegen` is available to any vision-capable conversation model. For Codex, choose the request model under **Settings → Provider → Provider Codex → Image tools → Image generation request model**. The options are `gpt-image-2` (the default), `gpt-image-2.6-flare`, and `gpt-image-2.6-sunburst`. This setting changes the model name sent in generation and edit requests; the subscription service does not report the model actually used, so selecting a name does not verify that the requested model is in effect. These image request models are separate from the conversation model picker.
+
+Provider xAI conversations use the Grok Imagine model selected under **Settings → Provider → Provider xAI**. The current pi-ai catalog exposes Imagine Image 2.0 and Imagine Image Quality. xAI edits accept up to three references; Codex accepts up to five. Every result is shown inline, saved as a durable attachment, and written to the active workspace with its detected PNG/JPEG/WebP/GIF extension.
 
 The Settings page has separate **Enhance read_image** and **Image generation for other models** toggles. Both default on. Turning off the first removes the plugin's agent-scoped override and restores Harness's original local-only `read_image` schema. Turning off the second keeps `imagegen` available to Codex vision models and rejects calls from other model providers at execution time.
 

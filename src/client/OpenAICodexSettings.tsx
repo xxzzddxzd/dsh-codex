@@ -13,6 +13,7 @@ const STATUS_PATH = '/plugins/dsh-openai-codex/auth/status'
 const LOGIN_PATH = '/plugins/dsh-openai-codex/auth/login'
 const LOGOUT_PATH = '/plugins/dsh-openai-codex/auth/logout'
 const IMAGE_TOOLS_PATH = '/plugins/dsh-openai-codex/image-tools'
+const CODEX_IMAGE_MODEL_PATH = '/plugins/dsh-openai-codex/codex-image-model'
 const RESPONSE_API_PATH = '/plugins/dsh-openai-codex/response-api'
 const POLL_INTERVAL_MS = 1_000
 const USAGE_POLL_INTERVAL_MS = 60_000
@@ -26,6 +27,11 @@ type AccountStatus =
 
 interface LoginChallenge {
   url: string
+}
+
+interface CodexImageModelSettings {
+  model: string
+  models: Array<{ id: string; name: string }>
 }
 
 /** Dependencies injected by the browser plugin entry. */
@@ -236,6 +242,9 @@ export function OpenAICodexSettings({ t, hideHeader = false }: OpenAICodexSettin
   const [imageTools, setImageTools] = useState<ImageToolPreferences | undefined>()
   const [imageToolsBusy, setImageToolsBusy] = useState(false)
   const [imageToolsError, setImageToolsError] = useState<string | undefined>()
+  const [imageModel, setImageModel] = useState<CodexImageModelSettings | undefined>()
+  const [imageModelBusy, setImageModelBusy] = useState(false)
+  const [imageModelError, setImageModelError] = useState<string | undefined>()
   const [responseApi, setResponseApi] = useState<ResponseApiPreferences | undefined>()
   const [responseApiBusy, setResponseApiBusy] = useState(false)
   const [responseApiError, setResponseApiError] = useState<string | undefined>()
@@ -257,6 +266,14 @@ export function OpenAICodexSettings({ t, hideHeader = false }: OpenAICodexSettin
       value => { setImageTools(value); setImageToolsError(undefined) },
       () => { setImageToolsError(t('imageToolSettingsFailed')) },
     )
+  }, [t])
+  useEffect(() => {
+    let active = true
+    void jsonRequest<CodexImageModelSettings>(CODEX_IMAGE_MODEL_PATH).then(
+      value => { if (active) { setImageModel(value); setImageModelError(undefined) } },
+      () => { if (active) setImageModelError(t('codexImageModelFailed')) },
+    )
+    return () => { active = false }
   }, [t])
   useEffect(() => {
     void jsonRequest<ResponseApiPreferences>(RESPONSE_API_PATH).then(
@@ -320,6 +337,18 @@ export function OpenAICodexSettings({ t, hideHeader = false }: OpenAICodexSettin
       setImageToolsError(t('imageToolSettingsFailed'))
     } finally {
       setImageToolsBusy(false)
+    }
+  }
+
+  const updateImageModel = async (model: string): Promise<void> => {
+    setImageModelBusy(true)
+    setImageModelError(undefined)
+    try {
+      setImageModel(await jsonRequest<CodexImageModelSettings>(CODEX_IMAGE_MODEL_PATH, 'POST', { model }))
+    } catch {
+      setImageModelError(t('codexImageModelFailed'))
+    } finally {
+      setImageModelBusy(false)
     }
   }
 
@@ -388,6 +417,21 @@ export function OpenAICodexSettings({ t, hideHeader = false }: OpenAICodexSettin
         <div>
           <h3 style={quotaTitleStyle}>{t('imageTools')}</h3>
           <p style={{ ...bodyStyle, marginTop: 5 }}>{t('imageToolsIntro')}</p>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label htmlFor="codex-image-request-model" style={statusStyle}>{t('codexImageModel')}</label>
+          <p id="codex-image-request-model-hint" style={bodyStyle}>{t('codexImageModelHint')}</p>
+          <select
+            id="codex-image-request-model"
+            aria-describedby="codex-image-request-model-hint"
+            style={{ ...selectStyle, alignSelf: 'flex-start', maxWidth: '100%' }}
+            disabled={imageModel === undefined || imageModelBusy}
+            value={imageModel?.model ?? ''}
+            onChange={event => { void updateImageModel(event.currentTarget.value) }}
+          >
+            {imageModel?.models.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
+          </select>
+          {imageModelError === undefined ? null : <p role="alert" style={errorStyle}>{imageModelError}</p>}
         </div>
         <div style={toggleRowStyle}>
           <span style={toggleCopyStyle}>

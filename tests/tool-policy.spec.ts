@@ -41,11 +41,13 @@ describe('ImageToolPolicy', () => {
     })
     expect(policy.vlessSnapshot()).toEqual({ useVless: false })
     expect(policy.xaiImageSnapshot()).toEqual({ model: 'grok-imagine-image-2.0' })
+    expect(policy.codexImageSnapshot()).toEqual({ model: 'gpt-image-2' })
 
     await policy.update({ shareImagegenWithOtherModels: false })
     await policy.updateResponseApi({ useNativeCompaction: true })
     await policy.updateVless(true)
     await policy.updateXaiImageModel('grok-imagine-image-quality')
+    await policy.updateCodexImageModel('gpt-image-2.6-flare')
 
     expect(policy.snapshot()).toEqual({
       modifyReadImage: true,
@@ -57,6 +59,8 @@ describe('ImageToolPolicy', () => {
     })
     expect(policy.vlessSnapshot()).toEqual({ useVless: true })
     expect(policy.xaiImageSnapshot()).toEqual({ model: 'grok-imagine-image-quality' })
+    expect(policy.codexImageSnapshot()).toEqual({ model: 'gpt-image-2.6-flare' })
+    await expect(policy.updateCodexImageModel('not-a-model')).rejects.toThrow('unsupported')
   })
 
   it('notifies the read_image enhancer when its live setting changes', async () => {

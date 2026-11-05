@@ -99,7 +99,23 @@ it('loads the Provider API through real Loader and Connection, fences owner acce
     expect(status).toBe(200)
     return JSON.parse(body)
   }
+  async function webSetImageModel(value: unknown, origin = 'http://127.0.0.1:3080'): Promise<{ status: number; body: unknown }> {
+    const route = routes.get('/plugins/dsh-openai-codex/codex-image-model')
+    if (!route) throw new Error('Missing image request model route')
+    let status = 0, body = ''
+    const request = { method: 'POST', headers: { host: '127.0.0.1:3080', origin },
+      socket: { remoteAddress: '127.0.0.1' },
+      async *[Symbol.asyncIterator]() { yield Buffer.from(JSON.stringify(value)) },
+    } as unknown as IncomingMessage
+    const response = { writeHead(value: number) { status = value }, end(value: string) { body = value } } as unknown as ServerResponse
+    await route.handler(request, response)
+    return { status, body: JSON.parse(body) }
+  }
+  expect((await webSetImageModel({ model: 'gpt-image-2.6-sunburst' }, 'https://hostile.invalid')).status).toBe(403)
+  expect((await webSetImageModel({ model: 'unrecognized' })).status).toBe(400)
+  expect(await webSetImageModel({ model: 'gpt-image-2.6-sunburst' })).toMatchObject({ status: 200, body: { model: 'gpt-image-2.6-sunburst' } })
   expect(await webGet('/plugins/dsh-openai-codex/image-tools')).toMatchObject({ modifyReadImage: false })
+  expect(await webGet('/plugins/dsh-openai-codex/codex-image-model')).toMatchObject({ model: 'gpt-image-2.6-sunburst' })
   expect(await webGet('/plugins/dsh-openai-codex/response-api')).toMatchObject({ useNativeCompaction: true })
   expect(await webGet('/plugins/dsh-openai-codex/providers/provider-codex/models')).toMatchObject({
     models: expect.arrayContaining([expect.objectContaining({ id: 'gpt-6.1-sol', maxTokens: 8192, visible: false })]),
@@ -124,6 +140,7 @@ it('loads the Provider API through real Loader and Connection, fences owner acce
   await context.loader.await()
   await vi.waitFor(async () => { expect(await api('images.get')).toMatchObject({ ok: true, value: { modifyReadImage: false } }) })
   expect(await api('responses.get')).toMatchObject({ ok: true, value: { useNativeCompaction: true } })
+  expect(await api('codex-image.get')).toMatchObject({ ok: true, value: { model: 'gpt-image-2.6-sunburst' } })
   expect(await api('models.get', { provider: Provider.OPENAI_CODEX_PROVIDER })).toMatchObject({
     ok: true, value: { models: expect.arrayContaining([expect.objectContaining({ id: 'gpt-6.1-sol', maxTokens: 8192, visible: false })]) },
   })

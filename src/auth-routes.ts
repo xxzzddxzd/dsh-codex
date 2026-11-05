@@ -21,6 +21,7 @@ import type { OpenAICodexService } from './service.ts'
 import { MANAGED_PROVIDERS } from './provider-ids.ts'
 import type { ManagedProvider } from './provider-ids.ts'
 import { XAI_IMAGE_MODELS } from './xai-images.ts'
+import { CODEX_IMAGE_MODELS } from './codex-images.ts'
 import { describeProviderComponents } from './components.ts'
 import { registerNativeProviderPanel } from './native-panel.ts'
 
@@ -32,6 +33,7 @@ export const OPENAI_CODEX_AUTH_LOGIN_PATH = '/plugins/dsh-openai-codex/auth/logi
 export const OPENAI_CODEX_AUTH_LOGOUT_PATH = '/plugins/dsh-openai-codex/auth/logout'
 /** Plugin-owned image-tool preference endpoint consumed by its browser half. */
 export const OPENAI_CODEX_IMAGE_TOOL_SETTINGS_PATH = '/plugins/dsh-openai-codex/image-tools'
+export const CODEX_IMAGE_MODEL_SETTINGS_PATH = '/plugins/dsh-openai-codex/codex-image-model'
 /** Plugin-owned Responses API experiment endpoint consumed by its browser half. */
 export const OPENAI_CODEX_RESPONSE_API_SETTINGS_PATH = '/plugins/dsh-openai-codex/response-api'
 /** Plugin-owned proxy endpoint consumed by its browser half. */
@@ -430,6 +432,21 @@ export function registerOpenAICodexAuthRoutes(
           if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
           await xaiAuth.signOut()
           json(res, 200, { ok: true })
+        },
+      }),
+      ctx.webServer.register({
+        kind: 'exact',
+        path: CODEX_IMAGE_MODEL_SETTINGS_PATH,
+        handler: async (req, res) => {
+          if (!trustedRequest(req)) return json(res, 403, { error: 'forbidden' })
+          const models = CODEX_IMAGE_MODELS.map(id => ({ id, name: id }))
+          if (req.method === 'GET') return json(res, 200, { ...imageTools.codexImageSnapshot(), models })
+          if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' })
+          try {
+            const body = await readJson(req)
+            if (Object.keys(body).length !== 1) throw new Error('request must contain only model')
+            return json(res, 200, { ...await imageTools.updateCodexImageModel(body.model), models })
+          } catch (error: unknown) { return json(res, 400, { error: safeMessage(error) }) }
         },
       }),
       ctx.webServer.register({
